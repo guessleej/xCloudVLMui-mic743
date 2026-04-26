@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models.schemas import ReportCreate, ReportOut, VlmSessionCapture
+from models.schemas import ReportCreate, ReportUpdate, ReportOut, VlmSessionCapture
 from services.report_service import (
     create_report, list_reports, get_report,
-    soft_delete_report, report_to_out,
+    update_report, soft_delete_report, report_to_out,
 )
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -41,6 +41,18 @@ async def get_single_report(
     db:        AsyncSession = Depends(get_db),
 ):
     report = await get_report(db, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return report_to_out(report)
+
+
+@router.patch("/{report_id}", response_model=ReportOut)
+async def update_existing_report(
+    report_id: str,
+    data:      ReportUpdate,
+    db:        AsyncSession = Depends(get_db),
+):
+    report = await update_report(db, report_id, data)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     return report_to_out(report)

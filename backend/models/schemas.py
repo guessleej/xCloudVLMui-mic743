@@ -127,6 +127,14 @@ class ReportCreate(BaseModel):
     markdown_content: Optional[str] = None
 
 
+class ReportUpdate(BaseModel):
+    title:            Optional[str] = None
+    equipment_id:     Optional[str] = None
+    equipment_name:   Optional[str] = None
+    risk_level:       Optional[str] = None
+    markdown_content: Optional[str] = None
+
+
 class ReportOut(BaseModel):
     id:               str
     title:            str
@@ -533,6 +541,7 @@ class TrainedModelCreate(BaseModel):
     source:           str                     = "custom"
     base_model:       Optional[str]           = None
     metrics:          Optional[dict]          = None
+    inference_config: Optional[dict]          = None
     notes:            Optional[str]           = None
 
 class TrainedModelUpdate(BaseModel):
@@ -550,6 +559,7 @@ class TrainedModelUpdate(BaseModel):
     source:           Optional[str]           = None
     base_model:       Optional[str]           = None
     metrics:          Optional[dict]          = None
+    inference_config: Optional[dict]          = None
     notes:            Optional[str]           = None
 
 class TrainedModelOut(BaseModel):
@@ -570,6 +580,7 @@ class TrainedModelOut(BaseModel):
     source:           str
     base_model:       Optional[str]   = None
     metrics:          Optional[dict]  = None
+    inference_config: Optional[dict]  = None
     notes:            Optional[str]   = None
     created_at:       datetime
     updated_at:       datetime

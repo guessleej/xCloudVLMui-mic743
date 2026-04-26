@@ -262,3 +262,33 @@ def _extract_chunks(raw: bytes, suffix: str, chunk_size: int = 800) -> list[str]
         start += chunk_size - overlap
 
     return [c.strip() for c in chunks if c.strip()]
+
+
+# -- Embedding connection test ------------------------------------------
+
+@router.get("/test-embed")
+async def test_embed_connection():
+    """Test embedding model connection only (no LLM call). Returns ok, dims, latency_ms."""
+    import time
+    from services.embedding_service import get_embedding
+    from config import get_settings
+    cfg = get_settings()
+    t0 = time.monotonic()
+    vec = await get_embedding("embedding connection test")
+    latency_ms = round((time.monotonic() - t0) * 1000)
+    if vec:
+        return {
+            "ok": True,
+            "dims": len(vec),
+            "latency_ms": latency_ms,
+            "model": cfg.embed_model,
+            "url": cfg.llm_base_url,
+        }
+    return {
+        "ok": False,
+        "dims": 0,
+        "latency_ms": latency_ms,
+        "model": cfg.embed_model,
+        "url": cfg.llm_base_url,
+        "error": "embedding returned empty vector, check model is downloaded",
+    }

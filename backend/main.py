@@ -54,6 +54,19 @@ async def lifespan(app: FastAPI):
     logger.info("=== xCloudVLMui Platform starting up ===")
     await init_db()
     logger.info("SQLite DB initialised.")
+
+    # ── SQLite 欄位遷移（新增欄位時安全執行）────────────────────────
+    try:
+        from sqlalchemy import text as _text
+        from database import engine as _mig_engine
+        async with _mig_engine.begin() as _conn:
+            await _conn.execute(_text(
+                "ALTER TABLE trained_models ADD COLUMN inference_config JSON"
+            ))
+        logger.info("Migration: added inference_config column to trained_models.")
+    except Exception as _mig_err:
+        # OperationalError = 欄位已存在，正常忽略
+        logger.debug("inference_config column already exists (skipped): %s", _mig_err)
     await init_syslog_db()
     logger.info("Syslog DB initialised (syslog.db).")
     await log_startup()

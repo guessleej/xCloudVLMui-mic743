@@ -31,6 +31,14 @@ RUN if [ -f "public/models/yolo26n.onnx" ]; then \
       echo "[YOLO26] No pre-built model — CDN fallback will be used at runtime"; \
     fi
 
+# NEXT_PUBLIC_* 變數必須在 build 時注入（瀏覽器端無法讀 runtime env）
+ARG NEXT_PUBLIC_API_URL=http://localhost:8780
+ARG BACKEND_URL=http://backend:8000
+ENV BACKEND_URL=$BACKEND_URL
+ARG NEXT_PUBLIC_WS_URL=
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
+
 # 建置 Next.js
 ENV NEXT_TELEMETRY_DISABLED 1
 RUN npm run build

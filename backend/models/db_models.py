@@ -304,6 +304,9 @@ class TrainedModel(Base):
     # 效能指標
     metrics:          Mapped[Optional[dict]] = mapped_column(JSON,         nullable=True)              # {mAP:40.9, precision:87, latency_ms:56}
 
+    # 推論參數設定（供前端 ONNX runtime 使用）
+    inference_config: Mapped[Optional[dict]] = mapped_column(JSON,         nullable=True)              # {conf:0.25, iou:0.7, imgsz:640, ...}
+
     # 備註與時間
     notes:            Mapped[Optional[str]]  = mapped_column(Text,         nullable=True)
     created_at:       Mapped[datetime]       = mapped_column(DateTime(timezone=True), default=_now, index=True)

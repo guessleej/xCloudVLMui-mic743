@@ -27,6 +27,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Settings2,
   Shield,
   Trash2,
   X,
@@ -35,6 +36,7 @@ import {
 import toast from "react-hot-toast";
 import { modelsApi } from "@/lib/api";
 import type { TrainedModel, YoloTaskType } from "@/types";
+import { InferenceConfigPanel } from "@/components/models/inference-config-panel";
 
 /* ═══════════════════════════════════════════════════════════════════
    常數與工具函式
@@ -85,7 +87,7 @@ function formatSize(mb?: number): string {
 
 function MetricBadge({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col items-center rounded-[14px] border border-white/8 bg-white/[0.03] px-3 py-2">
+    <div className="flex flex-col items-center rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
       <span className="text-[10px] uppercase tracking-[0.18em] text-slate-600">{label}</span>
       <span className="mt-1 text-sm font-semibold text-white">{value}</span>
     </div>
@@ -101,18 +103,22 @@ function ModelCard({
   onActivate,
   onEdit,
   onDelete,
+  onConfig,
+  isConfigActive,
 }: {
-  model:      TrainedModel;
-  onActivate: (id: string) => void;
-  onEdit:     (model: TrainedModel) => void;
-  onDelete:   (id: string, name: string) => void;
+  model:          TrainedModel;
+  onActivate:     (id: string) => void;
+  onEdit:         (model: TrainedModel) => void;
+  onDelete:       (id: string, name: string) => void;
+  onConfig:       (model: TrainedModel) => void;
+  isConfigActive: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const meta = TASK_META[model.task_type] ?? TASK_META.detect;
 
   return (
     <div
-      className={`rounded-[26px] border p-5 transition-all ${
+      className={`rounded-xl border p-3 transition-all ${
         model.is_active
           ? `${meta.border} ${meta.bg}`
           : "border-white/8 bg-white/[0.025]"
@@ -123,9 +129,9 @@ function ModelCard({
         <div className="flex items-start gap-3 min-w-0">
           {/* 任務類型圖示 */}
           <div
-            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border ${meta.border} ${meta.bg}`}
+            className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl border ${meta.border} ${meta.bg}`}
           >
-            <Cpu className={`h-5 w-5 ${meta.color}`} />
+            <Cpu className={`h-3.5 w-3.5 ${meta.color}`} />
           </div>
 
           <div className="min-w-0">
@@ -167,6 +173,18 @@ function ModelCard({
             </button>
           )}
           <button
+            onClick={() => onConfig(model)}
+            title="推論參數設定"
+            className={`ghost-button h-8 rounded-[12px] px-2 text-xs font-semibold transition-colors ${
+              isConfigActive
+                ? "bg-brand-500/20 text-brand-300"
+                : "text-slate-500 hover:text-brand-300"
+            }`}
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline ml-1">推論參數</span>
+          </button>
+          <button
             onClick={() => onEdit(model)}
             className="ghost-button h-8 w-8 rounded-[12px] px-0 text-slate-500 hover:text-brand-300"
             title="編輯"
@@ -191,14 +209,23 @@ function ModelCard({
         </div>
       </div>
 
-      {/* ── 輸出格式條 ── */}
-      <div className="mt-3 rounded-[14px] border border-white/6 bg-slate-950/40 px-4 py-2">
-        <p className="font-mono text-[11px] text-slate-400">{meta.outputDesc}</p>
+      {/* ── 輸出格式條 + 推論參數摘要 ── */}
+      <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-white/6 bg-slate-950/40 px-4 py-2">
+        <p className="font-mono text-[11px] text-slate-400 flex-1">{meta.outputDesc}</p>
+        {model.inference_config && (
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+            <Settings2 className="h-3 w-3 text-brand-400/60" />
+            <span>conf={model.inference_config.conf?.toFixed(2)}</span>
+            <span>·</span>
+            <span>imgsz={model.inference_config.imgsz}</span>
+            {model.inference_config.half && <span className="text-amber-400/70">· FP16</span>}
+          </div>
+        )}
       </div>
 
       {/* ── 效能指標 ── */}
       {model.metrics && Object.keys(model.metrics).length > 0 && (
-        <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
+        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
           {model.metrics.mAP50_95 !== undefined && (
             <MetricBadge label="mAP50-95" value={`${model.metrics.mAP50_95}`} />
           )}
@@ -228,7 +255,7 @@ function ModelCard({
 
       {/* ── 展開詳情 ── */}
       {expanded && (
-        <div className="mt-4 space-y-3 border-t border-white/6 pt-4">
+        <div className="mt-2 space-y-3 border-t border-white/6 pt-3">
           {model.description && (
             <p className="text-xs leading-5 text-slate-400 whitespace-pre-line">{model.description}</p>
           )}
@@ -261,14 +288,14 @@ function ModelCard({
               <p className="text-xs text-slate-600">
                 類別清單（前 30）
               </p>
-              <p className="mt-1 text-[11px] text-slate-500 leading-5">
+              <p className="mt-1 text-[11px] text-slate-500 leading-4">
                 {model.class_names.slice(0, 30).join(" · ")}
                 {model.class_names.length > 30 && ` … +${model.class_names.length - 30} 更多`}
               </p>
             </div>
           )}
           {model.notes && (
-            <div className="rounded-[14px] border border-brand-400/15 bg-brand-400/5 px-3 py-2">
+            <div className="rounded-xl border border-brand-400/15 bg-brand-400/5 px-3 py-2">
               <p className="text-xs text-slate-400">{model.notes}</p>
             </div>
           )}
@@ -368,13 +395,13 @@ function ModelModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-[32px] border border-white/10 bg-[#0a1020] shadow-2xl overflow-y-auto max-h-[90vh]">
+      <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0a1020] shadow-2xl overflow-y-auto max-h-[90vh]">
         <form onSubmit={handleSubmit}>
           {/* Header */}
-          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-6 py-5">
+          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
             <div>
               <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Model Registry</p>
-              <h2 className="mt-1 text-lg font-semibold text-white">
+              <h2 className="mt-1 text-sm font-semibold text-white">
                 {isEdit ? "編輯模型" : "新增模型登錄"}
               </h2>
             </div>
@@ -384,7 +411,7 @@ function ModelModal({
           </div>
 
           {/* Body */}
-          <div className="space-y-5 px-6 py-5">
+          <div className="space-y-3 px-4 py-3">
             {/* 名稱 */}
             <div>
               <label className={labelCls}>模型名稱 *</label>
@@ -398,7 +425,7 @@ function ModelModal({
             </div>
 
             {/* 任務類型 + 格式 */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className={labelCls}>任務類型 *</label>
                 <select
@@ -426,7 +453,7 @@ function ModelModal({
             </div>
 
             {/* 模型檔案 + 大小 */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className={labelCls}>模型檔案名稱 * <span className="text-slate-600">(/public/models/)</span></label>
                 <input
@@ -450,7 +477,7 @@ function ModelModal({
             </div>
 
             {/* 輸入尺寸 + 類別數 + 輸出張量 */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className={labelCls}>輸入尺寸 (px)</label>
                 <input
@@ -481,7 +508,7 @@ function ModelModal({
             </div>
 
             {/* 資料集 + 來源 + 基礎模型 */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className={labelCls}>資料集</label>
                 <input
@@ -571,7 +598,7 @@ function ModelModal({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 border-t border-white/8 px-6 py-4">
+          <div className="flex items-center justify-end gap-3 border-t border-white/8 px-4 py-3">
             <button type="button" onClick={onClose} className="secondary-button">取消</button>
             <button type="submit" disabled={saving} className="primary-button">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
@@ -594,6 +621,7 @@ export default function ModelsPage() {
   const [filterTask, setFilterTask] = useState<"all" | YoloTaskType>("all");
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState<TrainedModel | null>(null);
+  const [configTarget, setConfigTarget] = useState<TrainedModel | null>(null);
 
   /* ── 載入模型列表 ── */
   const load = useCallback(async () => {
@@ -675,7 +703,7 @@ export default function ModelsPage() {
     total:   models.length,
     active:  models.filter((m) => m.is_active).length,
     custom:  models.filter((m) => !m.is_builtin).length,
-    tasks:   [...new Set(models.map((m) => m.task_type))].length,
+    tasks:   Array.from(new Set(models.map((m) => m.task_type))).length,
   };
 
   /* ── 按 task_type 分組（過濾後）── */
@@ -696,25 +724,16 @@ export default function ModelsPage() {
         />
       )}
 
-      <div className="space-y-6">
+      <div className="space-y-3">
         {/* ── Header ── */}
-        <section className="panel-grid overflow-hidden rounded-[32px] p-6 sm:p-7 lg:p-8">
-          <div className="relative z-10 grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
+        <section className="panel-grid overflow-hidden rounded-2xl p-3 sm:p-4">
+          <div className="relative z-10 grid gap-3 xl:grid-cols-[1.4fr_0.8fr]">
             <div>
-              <div className="section-kicker">Model Registry</div>
-              <h1 className="display-title mt-4 text-3xl leading-tight sm:text-[40px]">
-                視覺模型管理
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
-                登錄並管理所有 YOLO ONNX 推論模型。支援
-                <span className="mx-1 text-brand-300">物件偵測</span>·
-                <span className="mx-1 text-emerald-300">姿態估計</span>·
-                <span className="mx-1 text-purple-300">實例分割</span>·
-                <span className="mx-1 text-amber-300">影像分類</span>·
-                <span className="mx-1 text-rose-300">旋轉框偵測</span>
-                五種任務，每種任務可啟用一個模型供視覺巡檢指揮台動態載入。
-              </p>
-              <div className="mt-6 flex flex-wrap gap-2">
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className="section-kicker">Model Registry</div>
+                <h2 className="text-sm font-semibold text-white">視覺模型管理</h2>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
                 <span className="signal-chip">
                   <Zap className="h-3.5 w-3.5 text-brand-300" />
                   E2E One-to-One Head（YOLO26 內建 NMS）
@@ -731,16 +750,16 @@ export default function ModelsPage() {
             </div>
 
             {/* 統計 */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { label: "已登錄",   value: stats.total,  unit: "個" },
                 { label: "已啟用",   value: stats.active, unit: "個" },
                 { label: "任務類型", value: stats.tasks,  unit: "種" },
                 { label: "自訂模型", value: stats.custom, unit: "個" },
               ].map(({ label, value, unit }) => (
-                <div key={label} className="rounded-[26px] border border-white/10 bg-white/[0.04] p-5">
+                <div key={label} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
                   <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{label}</p>
-                  <p className="mt-3 font-display text-3xl font-semibold text-white">
+                  <p className="mt-2 font-display text-2xl font-semibold text-white">
                     {value}
                     <span className="ml-1 text-base font-normal text-slate-400">{unit}</span>
                   </p>
@@ -751,7 +770,7 @@ export default function ModelsPage() {
         </section>
 
         {/* ── YOLO 格式說明橫幅 ── */}
-        <div className="rounded-[24px] border border-brand-400/20 bg-brand-500/5 p-5">
+        <div className="rounded-2xl border border-brand-400/20 bg-brand-500/5 p-3 sm:p-4">
           <div className="flex items-start gap-3">
             <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-300" />
             <div className="space-y-2">
@@ -808,54 +827,75 @@ export default function ModelsPage() {
           </div>
         </div>
 
-        {/* ── 模型列表（按任務分組）── */}
-        {loading && models.length === 0 ? (
-          <div className="flex items-center justify-center py-24">
-            <RefreshCw className="h-7 w-7 animate-spin text-slate-500" />
-          </div>
-        ) : Object.keys(grouped).length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-[32px] border border-white/8 py-24 text-center">
-            <Cpu className="h-12 w-12 text-slate-600" />
-            <p className="mt-4 text-sm text-slate-500">尚無符合條件的模型。</p>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {TASK_ORDER.filter((t) => grouped[t]).map((task) => {
-              const meta = TASK_META[task];
-              return (
-                <section key={task}>
-                  {/* 任務分組標題 */}
-                  <div className="mb-4 flex items-center gap-3">
-                    <div className={`h-px flex-1 ${meta.bg} border-t ${meta.border}`} />
-                    <div className={`flex items-center gap-2 rounded-full border px-4 py-1.5 ${meta.border} ${meta.bg}`}>
-                      <Cpu className={`h-3.5 w-3.5 ${meta.color}`} />
-                      <span className={`text-xs font-semibold ${meta.color}`}>
-                        {meta.label} · {meta.labelEn}
-                      </span>
-                      <span className="text-[11px] text-slate-500">
-                        {grouped[task].length} 個模型
-                      </span>
-                    </div>
-                    <div className={`h-px flex-1 ${meta.bg} border-t ${meta.border}`} />
-                  </div>
+        {/* ── 主區：模型列表 + 推論參數面板 ── */}
+        <div className={`gap-3 ${configTarget ? "grid xl:grid-cols-[1fr_360px]" : ""}`}>
 
-                  {/* 模型卡片 */}
-                  <div className="space-y-3">
-                    {grouped[task].map((m) => (
-                      <ModelCard
-                        key={m.id}
-                        model={m}
-                        onActivate={handleActivate}
-                        onEdit={(target) => { setEditTarget(target); setShowModal(true); }}
-                        onDelete={handleDelete}
-                      />
-                    ))}
-                  </div>
-                </section>
-              );
-            })}
+          {/* 左側：模型列表 */}
+          <div>
+            {loading && models.length === 0 ? (
+              <div className="flex items-center justify-center py-24">
+                <RefreshCw className="h-7 w-7 animate-spin text-slate-500" />
+              </div>
+            ) : Object.keys(grouped).length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-white/8 py-24 text-center">
+                <Cpu className="h-8 w-8 text-slate-600" />
+                <p className="mt-2 text-sm text-slate-500">尚無符合條件的模型。</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {TASK_ORDER.filter((t) => grouped[t]).map((task) => {
+                  const meta = TASK_META[task];
+                  return (
+                    <section key={task}>
+                      <div className="mb-2 flex items-center gap-3">
+                        <div className={`h-px flex-1 ${meta.bg} border-t ${meta.border}`} />
+                        <div className={`flex items-center gap-2 rounded-full border px-4 py-1.5 ${meta.border} ${meta.bg}`}>
+                          <Cpu className={`h-3.5 w-3.5 ${meta.color}`} />
+                          <span className={`text-xs font-semibold ${meta.color}`}>
+                            {meta.label} · {meta.labelEn}
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            {grouped[task].length} 個模型
+                          </span>
+                        </div>
+                        <div className={`h-px flex-1 ${meta.bg} border-t ${meta.border}`} />
+                      </div>
+                      <div className="space-y-3">
+                        {grouped[task].map((m) => (
+                          <ModelCard
+                            key={m.id}
+                            model={m}
+                            onActivate={handleActivate}
+                            onEdit={(target) => { setEditTarget(target); setShowModal(true); }}
+                            onDelete={handleDelete}
+                            onConfig={(target) => setConfigTarget((prev) => prev?.id === target.id ? null : target)}
+                            isConfigActive={configTarget?.id === m.id}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
+
+          {/* 右側：推論參數面板（sticky） */}
+          {configTarget && (
+            <div className="xl:sticky xl:top-4">
+              <div className="panel-soft h-[calc(100vh-180px)] min-h-[600px] overflow-hidden rounded-2xl border border-brand-400/20">
+                <InferenceConfigPanel
+                  model={configTarget}
+                  onClose={() => setConfigTarget(null)}
+                  onSaved={(updated) => {
+                    setModels((prev) => prev.map((m) => m.id === updated.id ? updated : m));
+                    setConfigTarget(updated);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </>
   );

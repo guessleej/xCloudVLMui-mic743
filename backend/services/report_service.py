@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.db_models import Report
-from models.schemas import ReportCreate, ReportOut
+from models.schemas import ReportCreate, ReportUpdate, ReportOut
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +201,24 @@ async def get_report(db: AsyncSession, report_id: str) -> Optional[Report]:
         select(Report).where(Report.id == report_id, Report.is_deleted == False)
     )
     return result.scalar_one_or_none()
+
+
+async def update_report(
+    db:        AsyncSession,
+    report_id: str,
+    data:      ReportUpdate,
+) -> Optional[Report]:
+    report = await get_report(db, report_id)
+    if not report:
+        return None
+    if data.title            is not None: report.title            = data.title
+    if data.equipment_id     is not None: report.equipment_id     = data.equipment_id
+    if data.equipment_name   is not None: report.equipment_name   = data.equipment_name
+    if data.risk_level       is not None: report.risk_level       = data.risk_level
+    if data.markdown_content is not None: report.markdown_content = data.markdown_content
+    await db.commit()
+    await db.refresh(report)
+    return report
 
 
 async def soft_delete_report(db: AsyncSession, report_id: str) -> bool:

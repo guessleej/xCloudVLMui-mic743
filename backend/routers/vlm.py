@@ -15,6 +15,41 @@ logger   = logging.getLogger(__name__)
 router   = APIRouter(prefix="/api/vlm", tags=["vlm"])
 settings = get_settings()
 
+# ── 抑制 thinking 洩漏的 system message ──────────────────────────────────────
+# qwen3-vl / gemma4 等思考模型在 vision 輸入時，會把 CoT 推理塞進 delta.content。
+# 加入 system 角色訊息並搭配 preamble 過濾，確保前端只收到結構化輸出。
+_VLM_SYSTEM = (
+    "你是工廠視覺 AI 分析師。"
+    "所有輸出必須使用繁體中文（台灣）。"
+    "嚴格禁止輸出任何英文（欄位值如 left/center/right/ok/warning/critical/high/medium/low 等格式標記除外）。"
+    "嚴格禁止輸出思考過程、分析步驟、前言、後記。"
+    "直接從【全域偵測清單】開始輸出結構化分析結果，不得有任何其他文字在前面。"
+)
+
+# ── preamble 過濾：累積 token 直到找到真正的結構化輸出起始行 ──────────────────
+# 「DETECT: 」是第一條實際資料行，比 【 更可靠（模型會在 CoT 裡先寫 【全域偵測清單】 描述）
+_PREAMBLE_MARKERS = ("DETECT: ", "DETECT:\t")
+
+
+def _strip_preamble(buf: str) -> tuple[str, bool]:
+    """
+    在緩衝字串中尋找結構化輸出起始標記。
+    若找到 DETECT: 開頭，補上段落標題後回傳。
+    回傳 (清理後輸出, 是否已找到標記)。
+    """
+    for marker in _PREAMBLE_MARKERS:
+        idx = buf.find(marker)
+        if idx != -1:
+            # 找到 DETECT: 行，往前保留最近一個 【…】 標題（若在 2 行以內）
+            prefix = buf[max(0, idx - 60): idx]
+            # 如果前面有 【全域偵測清單】 段落標題就保留，否則補上
+            if "【" in prefix:
+                header_start = prefix.rfind("【")
+                return buf[idx - (len(prefix) - header_start):], True
+            else:
+                return "【全域偵測清單】\n" + buf[idx:], True
+    return buf, False
+
 
 class VlmStatusResponse(BaseModel):
     webui_ok:    bool
@@ -79,7 +114,9 @@ async def vlm_diagnose(payload: DiagnoseRequest):
     直接呼叫 llama.cpp /v1/chat/completions 進行圖文診斷。
     若有 image_base64，附加為 vision message。
     """
-    messages: list[dict[str, Any]] = []
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": _VLM_SYSTEM},
+    ]
 
     if payload.image_base64:
         messages.append({
@@ -95,25 +132,92 @@ async def vlm_diagnose(payload: DiagnoseRequest):
     else:
         messages.append({"role": "user", "content": payload.prompt})
 
+    # 思考模型在 stream=True 時 delta.content 才有實際輸出
+    effective_max = max(payload.max_tokens, 1024)
+    model_name    = settings.vlm_model
+
     try:
-        async with httpx.AsyncClient(timeout=120.0) as c:
-            r = await c.post(
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)
+        ) as c:
+            content_parts: list[str] = []
+            finish_reason: str | None = None
+            model_id: str | None = None
+            preamble_buf  = ""
+            preamble_done = False
+
+            async with c.stream(
+                "POST",
                 f"{settings.llm_base_url}/v1/chat/completions",
                 json={
-                    "model":       settings.llm_model,
+                    "model":       model_name,
                     "messages":    messages,
-                    "max_tokens":  payload.max_tokens,
+                    "max_tokens":  effective_max,
                     "temperature": payload.temperature,
-                    "stream":      False,
+                    "stream":      True,
                 },
-            )
-            r.raise_for_status()
-            data   = r.json()
-            choice = data["choices"][0]
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    payload_str = line[6:].strip()
+                    if payload_str == "[DONE]":
+                        break
+                    try:
+                        chunk  = json.loads(payload_str)
+                        if not model_id:
+                            model_id = chunk.get("model")
+                        choice = chunk["choices"][0]
+                        token  = choice.get("delta", {}).get("content", "")
+                        fr     = choice.get("finish_reason")
+                        if token:
+                            if preamble_done:
+                                content_parts.append(token)
+                            else:
+                                preamble_buf += token
+                                clean, found = _strip_preamble(preamble_buf)
+                                if found:
+                                    preamble_done = True
+                                    preamble_buf  = ""
+                                    if clean:
+                                        content_parts.append(clean)
+                                    # 若緩衝超過 800 字仍未見標記，強制放行
+                                elif len(preamble_buf) > 800:
+                                    preamble_done = True
+                                    content_parts.append(preamble_buf)
+                                    preamble_buf  = ""
+                        if fr:
+                            finish_reason = fr
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        pass
+
+            # stream=True 無 content → 回退 stream=False
+            if not content_parts:
+                r2 = await c.post(
+                    f"{settings.llm_base_url}/v1/chat/completions",
+                    json={
+                        "model":       model_name,
+                        "messages":    messages,
+                        "max_tokens":  effective_max,
+                        "temperature": payload.temperature,
+                        "stream":      False,
+                    },
+                )
+                r2.raise_for_status()
+                d2     = r2.json()
+                ch2    = d2["choices"][0]
+                msg2   = ch2.get("message", {})
+                raw    = msg2.get("content") or msg2.get("reasoning") or ""
+                clean, _ = _strip_preamble(raw)
+                content_parts = [clean or raw]
+                finish_reason = ch2.get("finish_reason")
+                model_id      = d2.get("model")
+
             return DiagnoseResponse(
-                content=       choice["message"]["content"],
-                model=         data.get("model"),
-                finish_reason= choice.get("finish_reason"),
+                content=       "".join(content_parts),
+                model=         model_id,
+                finish_reason= finish_reason,
             )
     except httpx.HTTPStatusError as e:
         raise HTTPException(
@@ -134,7 +238,7 @@ async def vlm_diagnose(payload: DiagnoseRequest):
 #   {"type": "pong"}   ← 回應 server 的 ping
 # 協定（Server → Client）:
 #   {"type": "start"}
-#   {"type": "token",  "content": "..."}   ← 逐 token 即時輸出
+#   {"type": "token",  "content": "..."}   ← 逐 token 即時輸出（已濾除 preamble）
 #   {"type": "done",   "finish_reason": "stop"}
 #   {"type": "skip",   "message": "..."}   ← 上一幀推論中，略過此幀
 #   {"type": "error",  "message": "..."}
@@ -146,26 +250,22 @@ async def vlm_websocket_stream(websocket: WebSocket):
     await websocket.accept()
     logger.info("VLM WebSocket 連線建立 — client: %s", websocket.client)
 
-    # 每個連線的推論鎖：避免同一連線同時執行多次推論（backpressure 保護）
     inference_lock = asyncio.Lock()
 
     try:
         while True:
-            # 等待 client 傳來資料，逾時 60s 後送 ping 保活
             try:
                 raw = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
             except asyncio.TimeoutError:
                 await websocket.send_json({"type": "ping"})
                 continue
 
-            # 解析 JSON
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:
                 await websocket.send_json({"type": "error", "message": "無效的 JSON 格式"})
                 continue
 
-            # 忽略 pong
             if data.get("type") == "pong":
                 continue
 
@@ -174,14 +274,17 @@ async def vlm_websocket_stream(websocket: WebSocket):
             max_tokens  = min(int(data.get("max_tokens", 256)), settings.llm_max_tokens)
             temperature = float(data.get("temperature", 0.05))
 
-            # 若上一次推論尚未完成，跳過此幀（避免堆積）
             if inference_lock.locked():
                 await websocket.send_json({"type": "skip", "message": "推論中，略過此幀"})
                 continue
 
             async with inference_lock:
-                # 建構 OpenAI Vision 格式訊息
-                messages: list[dict[str, Any]] = []
+                VLM_MODEL = settings.vlm_model
+
+                # ── 組建訊息（加入 system 訊息抑制 thinking 洩漏）──────────
+                messages: list[dict[str, Any]] = [
+                    {"role": "system", "content": _VLM_SYSTEM},
+                ]
                 if image_b64:
                     messages.append({
                         "role": "user",
@@ -199,69 +302,106 @@ async def vlm_websocket_stream(websocket: WebSocket):
                 await websocket.send_json({"type": "start"})
 
                 try:
-                    # 串流呼叫 llama.cpp
                     async with httpx.AsyncClient(
                         timeout=httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)
                     ) as client:
+                        effective_max_tokens = max(max_tokens, 1024)
+
                         async with client.stream(
                             "POST",
                             f"{settings.llm_base_url}/v1/chat/completions",
                             json={
-                                "model":       settings.llm_model,
+                                "model":       VLM_MODEL,
                                 "messages":    messages,
-                                "max_tokens":  max_tokens,
+                                "max_tokens":  effective_max_tokens,
                                 "temperature": temperature,
                                 "stream":      True,
                             },
-                        ) as response:
-                            if response.status_code != 200:
-                                body = await response.aread()
+                        ) as resp:
+                            if resp.status_code != 200:
                                 await websocket.send_json({
                                     "type": "error",
-                                    "message": f"推論引擎回應 HTTP {response.status_code}",
+                                    "message": f"推論引擎回應 HTTP {resp.status_code}",
                                 })
                                 continue
 
-                            done_sent = False
-                            # 嘗試讀取純文字回應（非串流 fallback，如 stub / 測試用）
-                            plain_buffer: list[str] = []
+                            finish        = "stop"
+                            content_buf   = []          # 已通過 preamble 過濾的 token
+                            preamble_buf  = ""          # 等待標記的緩衝區
+                            preamble_done = False       # 是否已找到起始標記
 
-                            async for line in response.aiter_lines():
-                                # OpenAI SSE 格式
-                                if line.startswith("data: "):
-                                    chunk_str = line[6:].strip()
-                                    if chunk_str == "[DONE]":
-                                        await websocket.send_json({"type": "done", "finish_reason": "stop"})
-                                        done_sent = True
-                                        break
-                                    try:
-                                        chunk  = json.loads(chunk_str)
-                                        choice = chunk["choices"][0]
-                                        delta  = choice.get("delta", {})
-                                        content = delta.get("content") or ""
-                                        if content:
-                                            await websocket.send_json({"type": "token", "content": content})
-                                        finish = choice.get("finish_reason")
-                                        if finish and finish not in ("null", None):
-                                            await websocket.send_json({"type": "done", "finish_reason": finish})
-                                            done_sent = True
-                                            break
-                                    except (json.JSONDecodeError, KeyError, IndexError):
-                                        pass
-                                else:
-                                    # 收集非 SSE 純文字（stub 或非串流模式 fallback）
-                                    if line.strip():
-                                        plain_buffer.append(line)
+                            async for line in resp.aiter_lines():
+                                if not line.startswith("data: "):
+                                    continue
+                                payload_ws = line[6:].strip()
+                                if payload_ws == "[DONE]":
+                                    break
+                                try:
+                                    chunk  = json.loads(payload_ws)
+                                    choice = chunk["choices"][0]
+                                    delta  = choice.get("delta", {})
+                                    token  = delta.get("content", "")
+                                    fr     = choice.get("finish_reason")
+                                    if fr:
+                                        finish = fr
 
-                            # SSE 迴圈結束後若未發送 done（stub / 異常回應），
-                            # 將收集到的純文字作為結果送出，確保前端能正確結束分析狀態
-                            if not done_sent:
-                                if plain_buffer:
-                                    await websocket.send_json({
-                                        "type": "token",
-                                        "content": "\n".join(plain_buffer[:10]),  # 最多 10 行
-                                    })
-                                await websocket.send_json({"type": "done", "finish_reason": "stop"})
+                                    if token:
+                                        if preamble_done:
+                                            # 正常串流輸出
+                                            content_buf.append(token)
+                                            await websocket.send_json(
+                                                {"type": "token", "content": token}
+                                            )
+                                        else:
+                                            # 緩衝等待起始標記
+                                            preamble_buf += token
+                                            clean, found = _strip_preamble(preamble_buf)
+                                            if found:
+                                                preamble_done = True
+                                                preamble_buf  = ""
+                                                content_buf.append(clean)
+                                                await websocket.send_json(
+                                                    {"type": "token", "content": clean}
+                                                )
+                                            elif len(preamble_buf) > 800:
+                                                # 超過 800 字未見標記 → 強制放行
+                                                logger.warning(
+                                                    "VLM preamble 超過 800 字仍未見標記，強制放行"
+                                                )
+                                                preamble_done = True
+                                                content_buf.append(preamble_buf)
+                                                await websocket.send_json(
+                                                    {"type": "token", "content": preamble_buf}
+                                                )
+                                                preamble_buf = ""
+                                except (json.JSONDecodeError, KeyError, IndexError):
+                                    pass
+
+                        # stream=True 無 content → 回退 stream=False
+                        if not content_buf:
+                            logger.warning("VLM stream 無 content token，回退 stream=False")
+                            r2 = await client.post(
+                                f"{settings.llm_base_url}/v1/chat/completions",
+                                json={
+                                    "model":       VLM_MODEL,
+                                    "messages":    messages,
+                                    "max_tokens":  effective_max_tokens,
+                                    "temperature": temperature,
+                                    "stream":      False,
+                                },
+                            )
+                            if r2.status_code == 200:
+                                d2    = r2.json()
+                                ch2   = d2["choices"][0]
+                                msg2  = ch2.get("message", {})
+                                raw   = msg2.get("content") or msg2.get("reasoning") or ""
+                                clean, _ = _strip_preamble(raw)
+                                text2 = clean or raw
+                                finish = ch2.get("finish_reason", "stop")
+                                if text2:
+                                    await websocket.send_json({"type": "token", "content": text2})
+
+                        await websocket.send_json({"type": "done", "finish_reason": finish})
 
                 except httpx.ConnectError:
                     await websocket.send_json({

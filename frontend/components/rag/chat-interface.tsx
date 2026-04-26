@@ -35,6 +35,14 @@ export default function ChatInterface() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  // 自動調整 textarea 高度（支援 Shift+Enter 換行）
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+  }, [input]);
+
   const sendMessage = useCallback(
     async (text: string) => {
       if (!text.trim() || loading) return;
@@ -48,6 +56,7 @@ export default function ChatInterface() {
 
       setMessages((current) => [...current, userMessage]);
       setInput("");
+      if (inputRef.current) inputRef.current.style.height = "auto";
       setLoading(true);
 
       try {
@@ -86,7 +95,8 @@ export default function ChatInterface() {
   );
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Enter" && !event.shiftKey) {
+    // isComposing = true 表示 IME 組字中（注音/倉頡/拼音等），此時 Enter 是確認選字，不送出
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       sendMessage(input);
     }
@@ -242,8 +252,8 @@ export default function ChatInterface() {
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="輸入設備問題、維修需求或工單內容，Enter 送出，Shift + Enter 換行..."
-              rows={1}
-              className="min-h-[84px] w-full resize-none rounded-[26px] border border-white/10 bg-white/[0.04] px-5 py-4 text-sm leading-7 text-slate-100 placeholder:text-slate-500 focus:border-accent-400/30 focus:outline-none focus:ring-2 focus:ring-accent-400/10"
+              rows={2}
+              className="min-h-[84px] max-h-[240px] w-full resize-none overflow-y-auto rounded-[26px] border border-white/10 bg-white/[0.04] px-5 py-4 text-sm leading-7 text-slate-100 placeholder:text-slate-500 focus:border-accent-400/30 focus:outline-none focus:ring-2 focus:ring-accent-400/10"
             />
           </div>
           <button

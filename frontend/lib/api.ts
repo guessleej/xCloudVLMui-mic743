@@ -79,6 +79,9 @@ export const reportsApi = {
   /** 建立報告 */
   create: (payload: Record<string, unknown>) =>
     apiClient.post("/api/reports/", payload),
+  /** 更新報告（PATCH）*/
+  update: (id: string, payload: Record<string, unknown>) =>
+    apiClient.patch(`/api/reports/${id}`, payload),
   /** 刪除報告 */
   delete: (id: string) =>
     apiClient.delete(`/api/reports/${id}`),
@@ -285,6 +288,9 @@ export const eventsApi = {
 
   delete: (id: string) =>
     apiClient.delete(`/api/events/${id}`),
+
+  batchDelete: (ids: string[]) =>
+    apiClient.delete("/api/events/batch", { data: { ids } }),
 };
 
 // ── 事件中心 API ──────────────────────────────────────────────────────

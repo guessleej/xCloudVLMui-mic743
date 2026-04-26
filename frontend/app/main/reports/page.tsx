@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CalendarClock,
   Download,
+  ExternalLink,
   FileText,
   Filter,
+  Plus,
   RefreshCw,
   Search,
   Trash2,
@@ -15,6 +17,7 @@ import {
 import toast from "react-hot-toast";
 import { reportsApi } from "@/lib/api";
 import type { Report, RiskLevel } from "@/types";
+import { ReportAccordion } from "@/components/reports/report-accordion";
 
 const MOCK_REPORTS: Report[] = [];
 
@@ -34,11 +37,18 @@ const LEVEL_MAP = {
 };
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [reports, setReports] = useState<Report[]>(MOCK_REPORTS);
   const [selected, setSelected] = useState<Report | null>(MOCK_REPORTS[0]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [riskFilter, setRiskFilter] = useState<"all" | RiskLevel>("all");
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newEquip, setNewEquip] = useState("");
+  const [newRisk, setNewRisk] = useState<RiskLevel>("moderate");
+  const [newMd, setNewMd] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -110,24 +120,43 @@ export default function ReportsPage() {
     }
   };
 
+  const handleCreate = async () => {
+    if (!newTitle.trim()) { toast.error("請輸入報告標題。"); return; }
+    setCreating(true);
+    try {
+      const res = await reportsApi.create({
+        title:            newTitle.trim(),
+        equipment_name:   newEquip.trim() || undefined,
+        risk_level:       newRisk,
+        source:           "manual",
+        markdown_content: newMd || undefined,
+      });
+      const created = res.data as Report;
+      toast.success("報告已建立。");
+      setShowNewForm(false);
+      setNewTitle(""); setNewEquip(""); setNewRisk("moderate"); setNewMd("");
+      router.push(`/main/reports/${created.id}`);
+    } catch {
+      toast.error("建立失敗，請稍後再試。");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const criticalCount = reports.filter((report) => report.risk_level === "critical").length;
 
   return (
-    <div className="space-y-6">
-      <section className="panel-grid overflow-hidden rounded-[32px] p-6 sm:p-7 lg:p-8">
-        <div className="relative z-10 grid gap-6 xl:grid-cols-[1.15fr_0.95fr]">
+    <div className="space-y-3">
+      <section className="panel-grid overflow-hidden rounded-2xl p-3 sm:p-4">
+        <div className="relative z-10 grid gap-3 xl:grid-cols-[1.15fr_0.95fr]">
           <div>
-            <div className="section-kicker">Report Workspace</div>
-            <h1 className="display-title mt-4 text-3xl leading-tight sm:text-[40px]">
-              維護報告工作區
-            </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
-              將巡檢結果、風險層級與建議行動整理成可下載、可交付的維護文件，便於回報、
-              留檔與後續工單串接。
-            </p>
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="section-kicker">Report Workspace</div>
+              <h2 className="text-sm font-semibold text-white">維護報告工作區</h2>
+            </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-3">
             <TopStat label="報告總數" value={`${reports.length}`} detail="歷史與最新報告" />
             <TopStat label="危急件數" value={`${criticalCount}`} detail="需立即處置" />
             <TopStat
@@ -139,20 +168,29 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[0.8fr_1.35fr_0.65fr]">
-        <div className="panel-soft flex min-h-[860px] flex-col rounded-[30px] p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-3 border-b border-white/8 pb-5">
+      <section className="grid gap-3 xl:grid-cols-[0.8fr_1.35fr_0.65fr]">
+        <div className="panel-soft flex h-[calc(100vh-220px)] min-h-[520px] flex-col rounded-xl p-3 sm:p-4">
+          <div className="flex items-start justify-between gap-3 border-b border-white/8 pb-3">
             <div>
               <div className="section-kicker">Report Library</div>
-              <h2 className="mt-3 text-2xl font-semibold text-white">報告列表</h2>
+              <h2 className="mt-1 text-sm font-semibold text-white">報告列表</h2>
             </div>
-            <button onClick={fetchReports} disabled={loading} className="secondary-button px-3 py-2 text-xs">
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              更新
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={fetchReports} disabled={loading} className="secondary-button px-3 py-2 text-xs">
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                更新
+              </button>
+              <button
+                onClick={() => setShowNewForm(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-accent-500 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-600"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                新增
+              </button>
+            </div>
           </div>
 
-          <div className="mt-5">
+          <div className="mt-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <input
@@ -163,7 +201,7 @@ export default function ReportsPage() {
               />
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               {RISK_OPTIONS.map((option) => (
                 <button
                   key={option.value}
@@ -183,7 +221,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="mt-5 flex-1 space-y-3 overflow-y-auto pr-1">
+          <div className="mt-3 flex-1 space-y-3 overflow-y-auto pr-1">
             {loading && filteredReports.length === 0 ? (
               <EmptyLibrary title="讀取報告中..." />
             ) : filteredReports.length === 0 ? (
@@ -193,48 +231,68 @@ export default function ReportsPage() {
                 const level = LEVEL_MAP[report.risk_level] ?? LEVEL_MAP.moderate;
                 const isActive = selected?.id === report.id;
                 return (
-                  <button
+                  <div
                     key={report.id}
-                    onClick={() => setSelected(report)}
-                    className={`w-full rounded-[24px] border p-4 text-left transition-all ${
+                    className={`rounded-xl border p-3 transition-all ${
                       isActive
                         ? "border-accent-400/25 bg-accent-400/10 shadow-glow"
                         : "border-white/8 bg-white/[0.04] hover:border-white/15 hover:bg-white/[0.06]"
                     }`}
                   >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={level.badge}>{level.label}</span>
-                      <span className="table-chip">{report.source}</span>
+                    <button
+                      onClick={() => setSelected(report)}
+                      className="w-full text-left"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={level.badge}>{level.label}</span>
+                        <span className="table-chip">{report.source}</span>
+                      </div>
+                      <h3 className="mt-2 text-base font-semibold text-white">{report.title}</h3>
+                      <p className="mt-1 text-sm text-slate-400">
+                        {report.equipment_name ?? "未指定設備"}
+                      </p>
+                      <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        {new Date(report.created_at).toLocaleString("zh-TW")}
+                      </div>
+                    </button>
+                    <div className="mt-2 flex items-center justify-end gap-1.5 border-t border-white/5 pt-2">
+                      <Link
+                        href={`/main/reports/${report.id}`}
+                        className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        詳情/編輯
+                      </Link>
                     </div>
-                    <h3 className="mt-3 text-base font-semibold text-white">{report.title}</h3>
-                    <p className="mt-2 text-sm text-slate-400">
-                      {report.equipment_name ?? "未指定設備"}
-                    </p>
-                    <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
-                      <CalendarClock className="h-3.5 w-3.5" />
-                      {new Date(report.created_at).toLocaleString("zh-TW")}
-                    </div>
-                  </button>
+                  </div>
                 );
               })
             )}
           </div>
         </div>
 
-        <div className="panel-soft flex min-h-[860px] flex-col rounded-[30px] p-5 sm:p-6">
+        <div className="panel-soft flex h-[calc(100vh-220px)] min-h-[520px] flex-col rounded-xl p-3 sm:p-4">
           {selected ? (
             <>
-              <div className="flex flex-col gap-4 border-b border-white/8 pb-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-2 border-b border-white/8 pb-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="section-kicker">Report Preview</div>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">{selected.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                  <h2 className="mt-1 text-sm font-semibold text-white">{selected.title}</h2>
+                  <p className="mt-1 text-[11px] leading-4 text-slate-400">
                     {selected.equipment_name ?? "未指定設備"} · 建立於{" "}
                     {new Date(selected.created_at).toLocaleString("zh-TW")}
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/main/reports/${selected.id}`}
+                    className="secondary-button"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    詳情/編輯
+                  </Link>
                   <button onClick={() => handleDownload(selected)} className="secondary-button">
                     <Download className="h-4 w-4" />
                     下載 Markdown
@@ -246,33 +304,32 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              <div className="mt-5 flex-1 overflow-y-auto rounded-[28px] border border-white/8 bg-slate-950/35 p-5 sm:p-6">
-                <div className="markdown-body">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {selected.markdown_content ?? "_此報告無內容_"}
-                  </ReactMarkdown>
-                </div>
+              <div className="mt-3 flex-1 overflow-y-auto rounded-xl bg-slate-950/20 p-1 sm:p-2">
+                {selected.markdown_content
+                  ? <ReportAccordion markdown={selected.markdown_content} compact />
+                  : <p className="py-8 text-center text-sm text-slate-500">此報告尚無內容。</p>
+                }
               </div>
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
                 <FileText className="h-6 w-6 text-slate-400" />
               </div>
-              <h2 className="mt-4 text-xl font-semibold text-white">請選擇一份報告</h2>
-              <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">
+              <h2 className="mt-2 text-sm font-semibold text-white">請選擇一份報告</h2>
+              <p className="mt-1 max-w-md text-[11px] leading-4 text-slate-400">
                 你可以從左側報告庫切換不同巡檢結果，檢視內容並下載交付。
               </p>
             </div>
           )}
         </div>
 
-        <div className="panel-soft min-h-[860px] rounded-[30px] p-5 sm:p-6">
+        <div className="panel-soft h-[calc(100vh-220px)] min-h-[520px] overflow-y-auto rounded-xl p-3 sm:p-4">
           <div className="section-kicker">Inspector</div>
-          <h2 className="mt-3 text-2xl font-semibold text-white">報告資訊</h2>
+          <h2 className="mt-1 text-sm font-semibold text-white">報告資訊</h2>
 
           {selected ? (
-            <div className="mt-5 space-y-4">
+            <div className="mt-3 space-y-3">
               <MetaCard label="風險等級" value={LEVEL_MAP[selected.risk_level]?.label ?? selected.risk_level} badge={LEVEL_MAP[selected.risk_level]?.badge} />
               <MetaCard label="資料來源" value={selected.source} />
               <MetaCard label="設備名稱" value={selected.equipment_name ?? "未指定"} />
@@ -282,23 +339,100 @@ export default function ReportsPage() {
                 value={new Date(selected.created_at).toLocaleString("zh-TW")}
               />
 
-              <div className="rounded-[24px] border border-white/8 bg-slate-950/30 p-4">
+              <div className="rounded-xl border border-white/8 bg-slate-950/30 p-3">
                 <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">交付提示</p>
-                <p className="mt-3 text-sm leading-6 text-slate-300">
+                <p className="mt-2 text-[11px] leading-4 text-slate-300">
                   若這份報告屬於危急或升高等級，建議同步輸出給 EAM 工單系統與 LINE
                   推播；若屬預防性巡檢，則可納入下次保養排程。
                 </p>
               </div>
             </div>
           ) : (
-            <div className="mt-5 rounded-[24px] border border-dashed border-white/12 bg-slate-950/20 px-4 py-6">
-              <p className="text-sm leading-6 text-slate-400">
+            <div className="mt-3 rounded-xl border border-dashed border-white/12 bg-slate-950/20 px-3 pb-3 py-3">
+              <p className="text-[11px] leading-4 text-slate-400">
                 選取報告後，這裡會顯示風險層級、設備資訊與交付建議。
               </p>
             </div>
           )}
         </div>
       </section>
+
+      {/* ── 新增報告 Modal ─────────────────────────────────────── */}
+      {showNewForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-white">新增報告</h3>
+              <button
+                onClick={() => setShowNewForm(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white"
+              >✕</button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">報告標題 *</label>
+                <input
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="報告標題…"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-accent-400/40 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">設備名稱</label>
+                <input
+                  value={newEquip}
+                  onChange={(e) => setNewEquip(e.target.value)}
+                  placeholder="如：壓縮機 A01…"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-accent-400/40 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">風險等級</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(["critical","elevated","moderate","low"] as RiskLevel[]).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setNewRisk(r)}
+                      className={`rounded-xl border px-2 py-1.5 text-xs font-medium transition-all ${
+                        newRisk === r
+                          ? "border-accent-400/30 bg-accent-400/15 text-white"
+                          : "border-white/8 bg-white/[0.03] text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      {r === "critical" ? "🔴 危急" : r === "elevated" ? "🟠 升高" : r === "moderate" ? "🔵 中等" : "🟢 低"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">內容（Markdown，可選）</label>
+                <textarea
+                  value={newMd}
+                  onChange={(e) => setNewMd(e.target.value)}
+                  rows={5}
+                  placeholder="Markdown 內容，建立後可再編輯…"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:border-accent-400/40 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setShowNewForm(false)} className="secondary-button px-4 py-2 text-xs">取消</button>
+              <button
+                onClick={handleCreate}
+                disabled={creating}
+                className="flex items-center gap-1.5 rounded-xl bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-600 disabled:opacity-50"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {creating ? "建立中…" : "建立報告"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -313,10 +447,10 @@ function TopStat({
   detail: string;
 }) {
   return (
-    <div className="rounded-[26px] border border-white/10 bg-white/[0.04] p-5">
+    <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
       <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{label}</p>
-      <p className="mt-3 font-display text-3xl font-semibold text-white">{value}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-400">{detail}</p>
+      <p className="mt-2 font-display text-2xl font-semibold text-white">{value}</p>
+      <p className="mt-1 text-[11px] leading-4 text-slate-400">{detail}</p>
     </div>
   );
 }
@@ -331,14 +465,14 @@ function MetaCard({
   badge?: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-white/8 bg-white/[0.04] p-4">
+    <div className="rounded-xl border border-white/8 bg-white/[0.04] p-3">
       <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{label}</p>
       {badge ? (
-        <div className="mt-3">
+        <div className="mt-2">
           <span className={badge}>{value}</span>
         </div>
       ) : (
-        <p className="mt-3 text-sm leading-6 text-white">{value}</p>
+        <p className="mt-2 text-[11px] leading-4 text-white">{value}</p>
       )}
     </div>
   );
@@ -346,7 +480,7 @@ function MetaCard({
 
 function EmptyLibrary({ title }: { title: string }) {
   return (
-    <div className="rounded-[24px] border border-dashed border-white/12 bg-slate-950/20 px-4 py-8 text-center text-sm text-slate-400">
+    <div className="rounded-xl border border-dashed border-white/12 bg-slate-950/20 px-3 py-8 text-center text-sm text-slate-400">
       {title}
     </div>
   );

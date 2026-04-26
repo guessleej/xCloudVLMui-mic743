@@ -5,9 +5,12 @@ import {
   AlertTriangle,
   Bell,
   CheckCircle2,
+  CheckSquare,
   Clock,
   Cog,
+  Download,
   Eye,
+  FileText,
   Filter,
   Info,
   Loader2,
@@ -15,6 +18,8 @@ import {
   Search,
   Server,
   Shield,
+  Square,
+  Trash2,
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -110,9 +115,9 @@ function StatCard({ label, value, sub, accent }: {
   label: string; value: string | number; sub?: string; accent?: string;
 }) {
   return (
-    <div className="rounded-[20px] border border-white/10 bg-white/[0.04] p-4">
+    <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
       <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className={`mt-2 font-display text-2xl font-semibold ${accent ?? "text-white"}`}>{value}</p>
+      <p className={`mt-2 font-display text-sm font-semibold ${accent ?? "text-white"}`}>{value}</p>
       {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
     </div>
   );
@@ -143,10 +148,18 @@ function EventCard({
   event,
   onAcknowledge,
   onResolve,
+  onDelete,
+  selectionMode,
+  isSelected,
+  onToggleSelect,
 }: {
-  event:        FactoryEvent;
-  onAcknowledge: (id: string) => void;
-  onResolve:    (id: string) => void;
+  event:          FactoryEvent;
+  onAcknowledge:  (id: string) => void;
+  onResolve:      (id: string) => void;
+  onDelete:       (id: string) => void;
+  selectionMode:  boolean;
+  isSelected:     boolean;
+  onToggleSelect: (id: string) => void;
 }) {
   const sm = getSeverityMeta(event.severity);
   const tm = getTypeMeta(event.event_type);
@@ -155,18 +168,37 @@ function EventCard({
 
   return (
     <div
-      className={`border-l-2 ${sm.border} rounded-r-[14px] border border-l-[2px] border-white/[0.06] mb-2 overflow-hidden transition-colors ${
-        event.resolved ? "opacity-60" : "hover:bg-white/[0.03]"
-      } bg-white/[0.025]`}
+      onClick={selectionMode ? () => onToggleSelect(event.id) : undefined}
+      className={`border-l-2 ${sm.border} rounded-r-[14px] border border-l-[2px] mb-2 overflow-hidden transition-colors ${
+        selectionMode
+          ? `cursor-pointer ${isSelected
+              ? "border-sky-500/40 bg-sky-500/[0.07]"
+              : "border-white/[0.06] bg-white/[0.025] hover:bg-white/[0.04]"}`
+          : `border-white/[0.06] ${event.resolved ? "opacity-60" : "hover:bg-white/[0.03]"} bg-white/[0.025]`
+      }`}
     >
       <div className="flex items-start gap-3 px-4 py-3">
 
-        {/* Severity dot + type icon */}
+        {/* Left column: checkbox in selection mode, dot+icon otherwise */}
         <div className="flex flex-col items-center gap-1.5 pt-0.5 flex-shrink-0">
-          <div className={`h-2.5 w-2.5 rounded-full ${sm.dot} ${event.resolved ? "opacity-40" : "animate-pulse''"}`} />
-          <div className={`flex h-7 w-7 items-center justify-center rounded-lg border ${sm.pill}`}>
-            <TypeIcon className="h-3.5 w-3.5" />
-          </div>
+          {selectionMode ? (
+            <div className={`flex h-7 w-7 items-center justify-center rounded-lg border ${
+              isSelected
+                ? "border-sky-500/50 bg-sky-500/20 text-sky-300"
+                : "border-white/15 bg-white/[0.04] text-slate-500"
+            }`}>
+              {isSelected
+                ? <CheckSquare className="h-3.5 w-3.5" />
+                : <Square className="h-3.5 w-3.5" />}
+            </div>
+          ) : (
+            <>
+              <div className={`h-2.5 w-2.5 rounded-full ${sm.dot} ${event.resolved ? "opacity-40" : "animate-pulse"}`} />
+              <div className={`flex h-7 w-7 items-center justify-center rounded-lg border ${sm.pill}`}>
+                <TypeIcon className="h-3.5 w-3.5" />
+              </div>
+            </>
+          )}
         </div>
 
         {/* Content */}
@@ -216,9 +248,9 @@ function EventCard({
                 session: {event.session_id.slice(0, 8)}…
               </span>
             )}
-            {event.thumbnail && (
+            {event.thumbnail && !selectionMode && (
               <button
-                onClick={() => setShowThumb(v => !v)}
+                onClick={e => { e.stopPropagation(); setShowThumb(v => !v); }}
                 className="text-sky-500 hover:text-sky-400 underline"
               >
                 {showThumb ? "隱藏截圖" : "查看截圖"}
@@ -227,7 +259,7 @@ function EventCard({
           </div>
 
           {/* Thumbnail */}
-          {showThumb && event.thumbnail && (
+          {showThumb && event.thumbnail && !selectionMode && (
             <div className="mt-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -239,10 +271,10 @@ function EventCard({
           )}
         </div>
 
-        {/* Action buttons */}
-        {!event.resolved && (
+        {/* Action buttons — hidden in selection mode */}
+        {!selectionMode && (
           <div className="flex flex-col gap-1.5 flex-shrink-0">
-            {!event.acknowledged && (
+            {!event.resolved && !event.acknowledged && (
               <button
                 onClick={() => onAcknowledge(event.id)}
                 title="確認事件"
@@ -251,12 +283,21 @@ function EventCard({
                 <Bell className="h-3.5 w-3.5" />
               </button>
             )}
+            {!event.resolved && (
+              <button
+                onClick={() => onResolve(event.id)}
+                title="標記已解決"
+                className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.04] text-slate-400 transition hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button
-              onClick={() => onResolve(event.id)}
-              title="標記已解決"
-              className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.04] text-slate-400 transition hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
+              onClick={() => onDelete(event.id)}
+              title="刪除事件"
+              className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.04] text-slate-400 transition hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300"
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
@@ -264,6 +305,55 @@ function EventCard({
       </div>
     </div>
   );
+}
+
+// ── MD 匯出 ───────────────────────────────────────────────────────────
+function exportEventsAsMd(events: FactoryEvent[], label = "所有事件") {
+  const now = new Date().toLocaleString("zh-TW", { hour12: false });
+  const lines: string[] = [
+    `# 工廠事件報告`,
+    ``,
+    `- **匯出時間**：${now}`,
+    `- **範圍**：${label}`,
+    `- **筆數**：${events.length}`,
+    ``,
+    `---`,
+    ``,
+  ];
+
+  events.forEach((ev, idx) => {
+    const sm = getSeverityMeta(ev.severity);
+    const tm = getTypeMeta(ev.event_type);
+    const status = ev.resolved ? "已解決" : ev.acknowledged ? "已確認" : "未處理";
+
+    lines.push(`## ${idx + 1}. ${ev.title}`);
+    lines.push(``);
+    lines.push(`| 欄位 | 內容 |`);
+    lines.push(`|------|------|`);
+    lines.push(`| 嚴重度 | ${sm.label} (${ev.severity}) |`);
+    lines.push(`| 類型 | ${tm.label} (${ev.event_type}) |`);
+    lines.push(`| 來源 | ${ev.source} |`);
+    lines.push(`| 狀態 | ${status} |`);
+    lines.push(`| 時間 | ${formatTime(ev.created_at)} |`);
+    if (ev.location) lines.push(`| 位置 | ${ev.location} |`);
+    if (ev.equipment_id) lines.push(`| 設備 ID | ${ev.equipment_id} |`);
+    if (ev.session_id) lines.push(`| Session | ${ev.session_id} |`);
+    if (ev.resolved_at) lines.push(`| 解決時間 | ${formatTime(ev.resolved_at)} |`);
+    lines.push(``);
+    lines.push(`**訊息**：${ev.message}`);
+    lines.push(``);
+    lines.push(`---`);
+    lines.push(``);
+  });
+
+  const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  const date = new Date().toISOString().slice(0, 10);
+  a.download = `factory-events-${date}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ── 常數 ──────────────────────────────────────────────────────────────
@@ -286,10 +376,17 @@ const SEVERITY_PILL_ACTIVE: Record<string, string> = {
 
 // ── 主頁面 ────────────────────────────────────────────────────────────
 export default function FactoryEventsPage() {
-  const [events,      setEvents]      = useState<FactoryEvent[]>([]);
-  const [stats,       setStats]       = useState<EventStats | null>(null);
-  const [loading,     setLoading]     = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [events,        setEvents]        = useState<FactoryEvent[]>([]);
+  const [stats,         setStats]         = useState<EventStats | null>(null);
+  const [loading,       setLoading]       = useState(false);
+  const [autoRefresh,   setAutoRefresh]   = useState(true);
+
+  // Selection state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds,   setSelectedIds]   = useState<Set<string>>(new Set());
+
+  // Export dropdown
+  const [showExport,    setShowExport]    = useState(false);
 
   // Filters
   const [severity,    setSeverity]    = useState("ALL");
@@ -343,13 +440,14 @@ export default function FactoryEventsPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Auto-refresh every 15s
+  // Auto-refresh every 15s (pause in selection mode to avoid confusion)
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!autoRefresh || selectionMode) return;
     const id = setInterval(fetchAll, 15_000);
     return () => clearInterval(id);
-  }, [autoRefresh, fetchAll]);
+  }, [autoRefresh, selectionMode, fetchAll]);
 
+  // ── Handlers ───────────────────────────────────────────────────────
   const handleAcknowledge = async (id: string) => {
     try {
       await eventsApi.acknowledge(id);
@@ -372,19 +470,74 @@ export default function FactoryEventsPage() {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm("確定要永久刪除這筆事件？此操作無法復原。")) return;
+    try {
+      await eventsApi.delete(id);
+      toast.success("事件已刪除");
+      fetchAll();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      toast.error("刪除失敗：" + (e?.response?.data?.detail ?? "未知錯誤"));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`確定要永久刪除選取的 ${selectedIds.size} 筆事件？此操作無法復原。`)) return;
+    try {
+      await eventsApi.batchDelete(Array.from(selectedIds));
+      toast.success(`已刪除 ${selectedIds.size} 筆事件`);
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+      fetchAll();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      toast.error("批次刪除失敗：" + (e?.response?.data?.detail ?? "未知錯誤"));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll  = () => setSelectedIds(new Set(events.map(e => e.id)));
+  const clearSelect = () => setSelectedIds(new Set());
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleExportSelected = () => {
+    if (selectedIds.size === 0) { toast.error("請先勾選要匯出的事件"); return; }
+    const selected = events.filter(e => selectedIds.has(e.id));
+    exportEventsAsMd(selected, `已選取 ${selected.length} 筆`);
+    setShowExport(false);
+  };
+
+  const handleExportAll = () => {
+    exportEventsAsMd(events, `全部 ${events.length} 筆`);
+    setShowExport(false);
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <section className="panel-grid overflow-hidden rounded-[28px] px-5 py-4 sm:px-6">
-        <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-brand-500/30 bg-brand-500/15">
-              <AlertTriangle className="h-5 w-5 text-brand-300" />
+      <section className="panel-grid overflow-hidden rounded-2xl px-3 py-2 sm:px-4">
+        <div className="relative z-10 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-brand-500/30 bg-brand-500/15">
+              <AlertTriangle className="h-3.5 w-3.5 text-brand-300" />
             </div>
             <div>
               <div className="section-kicker">Factory Events</div>
-              <h1 className="display-title mt-0.5 text-xl sm:text-2xl">工廠事件</h1>
+              <h1 className="display-title mt-1 text-sm font-semibold">工廠事件</h1>
             </div>
             {stats && (
               <div className="hidden items-center gap-2 xl:flex">
@@ -403,6 +556,48 @@ export default function FactoryEventsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* 批次選取 */}
+            <button
+              onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
+              className={`secondary-button ${selectionMode ? "border-sky-500/50 bg-sky-500/15 text-sky-200" : ""}`}
+            >
+              {selectionMode ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+              {selectionMode ? "退出選取" : "批次選取"}
+            </button>
+
+            {/* 匯出 MD */}
+            <div className="relative">
+              <button
+                onClick={() => setShowExport(v => !v)}
+                className="secondary-button"
+              >
+                <FileText className="h-4 w-4" />
+                匯出 MD
+              </button>
+              {showExport && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowExport(false)} />
+                  <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-[14px] border border-white/10 bg-slate-900 shadow-xl">
+                    <button
+                      onClick={handleExportSelected}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/[0.06]"
+                    >
+                      <Download className="h-3.5 w-3.5 text-sky-400" />
+                      匯出已選取
+                    </button>
+                    <div className="border-t border-white/8" />
+                    <button
+                      onClick={handleExportAll}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/[0.06]"
+                    >
+                      <Download className="h-3.5 w-3.5 text-emerald-400" />
+                      匯出全部（{events.length}）
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
             <button
               onClick={() => setAutoRefresh(v => !v)}
               className={`secondary-button ${autoRefresh ? "border-brand-500/50 bg-brand-500/15 text-brand-200" : ""}`}
@@ -419,7 +614,7 @@ export default function FactoryEventsPage() {
 
         {/* Stats bar */}
         {stats && (
-          <div className="relative z-10 mt-4 grid grid-cols-2 gap-3 border-t border-white/8 pt-4 sm:grid-cols-4">
+          <div className="relative z-10 mt-2 grid grid-cols-2 gap-2 border-t border-white/8 pt-3 sm:grid-cols-4">
             <StatCard
               label="事件總數"
               value={stats.total.toLocaleString()}
@@ -448,7 +643,7 @@ export default function FactoryEventsPage() {
       </section>
 
       {/* ── Filter Bar ──────────────────────────────────────────── */}
-      <section className="panel-soft rounded-[24px] px-4 py-4">
+      <section className="panel-soft rounded-xl px-3 py-3">
         <div className="flex flex-wrap items-center gap-3">
 
           {/* Search */}
@@ -541,7 +736,7 @@ export default function FactoryEventsPage() {
                 <button
                   key={type}
                   onClick={() => setEventType(eventType === type ? "ALL" : type)}
-                  className={`rounded-[16px] border px-3 py-2.5 text-left transition-all ${
+                  className={`rounded-xl border px-3 py-2.5 text-left transition-all ${
                     eventType === type
                       ? "border-brand-500/40 bg-brand-500/10"
                       : "border-white/8 bg-white/[0.025] hover:bg-white/[0.05]"
@@ -558,7 +753,7 @@ export default function FactoryEventsPage() {
 
       {/* ── Event List ───────────────────────────────────────── */}
       <section>
-        <div className="mb-3 flex items-center justify-between px-1">
+        <div className="mb-2 flex items-center justify-between px-1">
           <h2 className="text-sm font-semibold text-white">
             事件列表
             <span className="ml-2 text-xs font-normal text-slate-500">
@@ -567,14 +762,52 @@ export default function FactoryEventsPage() {
           </h2>
         </div>
 
+        {/* Batch operations bar */}
+        {selectionMode && (
+          <div className="mb-2 flex items-center gap-2 rounded-[14px] border border-sky-500/20 bg-sky-500/[0.06] px-4 py-2.5">
+            <span className="text-xs text-sky-300 font-semibold min-w-[80px]">
+              已選 {selectedIds.size} / {events.length} 筆
+            </span>
+            <button
+              onClick={selectAll}
+              className="rounded-[8px] border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300 hover:text-white transition-colors"
+            >
+              全選
+            </button>
+            <button
+              onClick={clearSelect}
+              className="rounded-[8px] border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300 hover:text-white transition-colors"
+            >
+              取消全選
+            </button>
+            <div className="flex-1" />
+            <button
+              onClick={handleExportSelected}
+              disabled={selectedIds.size === 0}
+              className="flex items-center gap-1.5 rounded-[10px] border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Download className="h-3.5 w-3.5" />
+              匯出 MD（{selectedIds.size}）
+            </button>
+            <button
+              onClick={handleBatchDelete}
+              disabled={selectedIds.size === 0}
+              className="flex items-center gap-1.5 rounded-[10px] border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              刪除選取（{selectedIds.size}）
+            </button>
+          </div>
+        )}
+
         {loading && events.length === 0 ? (
-          <div className="panel-soft flex items-center justify-center rounded-[28px] py-20">
+          <div className="panel-soft flex items-center justify-center rounded-2xl py-20">
             <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
           </div>
         ) : events.length === 0 ? (
-          <div className="panel-soft flex flex-col items-center rounded-[28px] py-16 text-center">
+          <div className="panel-soft flex flex-col items-center rounded-2xl py-16 text-center">
             <Info className="h-10 w-10 text-slate-600" />
-            <p className="mt-4 text-base font-semibold text-white">暫無事件記錄</p>
+            <p className="mt-2 text-base font-semibold text-white">暫無事件記錄</p>
             <p className="mt-2 text-sm text-slate-500">目前沒有符合篩選條件的事件，系統持續自動偵測中</p>
           </div>
         ) : (
@@ -585,6 +818,10 @@ export default function FactoryEventsPage() {
                 event={event}
                 onAcknowledge={handleAcknowledge}
                 onResolve={handleResolve}
+                onDelete={handleDelete}
+                selectionMode={selectionMode}
+                isSelected={selectedIds.has(event.id)}
+                onToggleSelect={toggleSelect}
               />
             ))}
           </div>

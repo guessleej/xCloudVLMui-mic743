@@ -50,3 +50,15 @@ frontend/*.bin
 # macOS iCloud Drive 衝突副本（自動產生的 "filename 2.ext" 格式）
 * 2.*
 * 2
+
+# Backup files
+*.bak
+*.bak.*
+
+# SSL certificates (machine-specific)
+nginx/ssl/
+
+# Stray temp files copied from containers
+backend/chat.py
+backend/knowledge.py
+backend/rag_service.py

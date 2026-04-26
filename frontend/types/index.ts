@@ -119,25 +119,35 @@ export interface RagDocument {
 
 // ── 系統設定 ─────────────────────────────────────────────────────────
 export interface SystemSettings {
-  ocr_engine:        string;   // "vlm" | "disabled"
-  embed_model_url:   string;
-  embed_model_name:  string;
-  llm_model_url:     string;
-  llm_model_name:    string;
-  chunk_size:        number;
-  chunk_overlap:     number;
-  rag_top_k:         number;
+  ocr_engine:         string;   // "vlm" | "disabled"
+  embed_model_url:    string;
+  embed_model_name:   string;
+  llm_model_url:      string;
+  llm_model_name:     string;
+  vlm_model_name:     string;   // VLM 視覺推論模型（如 qwen3-vl:30b）
+  chunk_size:         number;
+  chunk_overlap:      number;
+  rag_top_k:          number;
+  llm_temperature:    number;   // RAG 生成溫度 0.0–1.0
+  llm_max_tokens:     number;   // RAG 最大生成 token 數
+  min_score:          number;   // 最低語意相似度門檻 0.0–1.0
+  rag_system_prompt:  string;   // RAG System Prompt
 }
 
 export interface SystemSettingsUpdate {
-  ocr_engine?:        string;
-  embed_model_url?:   string;
-  embed_model_name?:  string;
-  llm_model_url?:     string;
-  llm_model_name?:    string;
-  chunk_size?:        number;
-  chunk_overlap?:     number;
-  rag_top_k?:         number;
+  ocr_engine?:         string;
+  embed_model_url?:    string;
+  embed_model_name?:   string;
+  llm_model_url?:      string;
+  llm_model_name?:     string;
+  vlm_model_name?:     string;
+  chunk_size?:         number;
+  chunk_overlap?:      number;
+  rag_top_k?:          number;
+  llm_temperature?:    number;
+  llm_max_tokens?:     number;
+  min_score?:          number;
+  rag_system_prompt?:  string;
 }
 
 // ── MQTT ─────────────────────────────────────────────────────────────
@@ -273,10 +283,27 @@ export interface TrainedModel {
   is_builtin:       boolean;
   source:           string;
   base_model?:      string;
-  metrics?:         Record<string, number>;
-  notes?:           string;
-  created_at:       string;
-  updated_at:       string;
+  metrics?:          Record<string, number>;
+  inference_config?: InferenceConfig;
+  notes?:            string;
+  created_at:        string;
+  updated_at:        string;
+}
+
+export interface InferenceConfig {
+  conf:          number;   // 信心閾值 0.01–0.99
+  iou:           number;   // IoU/NMS 閾值
+  max_det:       number;   // 最大偵測數
+  imgsz:         number;   // 推論尺寸 px
+  augment:       boolean;  // TTA 測試時增強
+  agnostic_nms:  boolean;  // 跨類別 NMS
+  half:          boolean;  // FP16 半精度
+  batch:         number;   // 批次大小
+  classes:       number[] | null;  // null = 全部類別
+  line_width:    number;   // 邊框粗細
+  show_labels:   boolean;
+  show_conf:     boolean;
+  font_size:     number;
 }
 
 export interface TrainedModelListResponse {

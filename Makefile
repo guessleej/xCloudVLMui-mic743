@@ -1,11 +1,11 @@
 ###############################################################################
-# Makefile — xCloudVLMui Platform [bot-mic743]
+# Makefile — xCloudVLMui Platform [bot-dgx]
 #
-# 硬體：Advantech MIC-743-AT
-# SoM ：NVIDIA Jetson Thor AGX
+# 硬體：Advantech NVIDIA DGX
+# SoM ：NVIDIA DGX
 # GPU ：Blackwell 2,560 CUDA Cores + 96 Tensor Cores (Gen5) — 2,070 FP4 TFLOPs
 # RAM ：128 GB LPDDR5X Unified Memory
-# CPU ：ARM Neoverse V3AE × 14 核
+# CPU ：x86_64
 #
 # ┌─ 首次部署 ──────────────────────────────────────────────────────────┐
 # │  make setup        # 複製 .env，確認 NVIDIA runtime                 │
@@ -13,7 +13,7 @@
 # │  make test         # 驗證所有服務健康狀態                           │
 # └────────────────────────────────────────────────────────────────────┘
 #
-# Port 配置（bot-mic743 專用）：
+# Port 配置（bot-dgx 專用）：
 #   nginx    → http://localhost:8780  ← 主要入口
 #   backend  → http://localhost:8101/api/health
 #   llama-cpp→ http://localhost:18180/health
@@ -40,7 +40,7 @@ all: help
 help:
 	@echo ""
 	@printf "$(BLUE)╔══════════════════════════════════════════════════════════════════╗$(NC)\n"
-	@printf "$(BLUE)║  xCloudVLMui — MIC-743 · Jetson Thor AGX · Blackwell · 128GB    ║$(NC)\n"
+	@printf "$(BLUE)║  xCloudVLMui — DGX · NVIDIA DGX · Blackwell · 512GB    ║$(NC)\n"
 	@printf "$(BLUE)╠══════════════════════════════════════════════════════════════════╣$(NC)\n"
 	@printf "$(BLUE)║  GPU: 2,560 CUDA Cores (Blackwell) · 2,070 FP4 TFLOPs           ║$(NC)\n"
 	@printf "$(BLUE)╠══════════════════════════════════════════════════════════════════╣$(NC)\n"
@@ -68,7 +68,7 @@ help:
 # ─────────────────────────────────────────────────────────────────────
 
 setup: check-gpu env-copy
-	@printf "$(GREEN)✓ MIC-743 setup 完成！執行 make up 啟動服務。$(NC)\n"
+	@printf "$(GREEN)✓ DGX setup 完成！執行 make up 啟動服務。$(NC)\n"
 
 env-copy:
 	@printf "$(BLUE)► 設定環境變數...$(NC)\n"
@@ -103,7 +103,7 @@ check-gpu:
 	fi
 
 gpu-info:
-	@printf "$(CYAN)══ Jetson Thor AGX 效能狀態 ══$(NC)\n"
+	@printf "$(CYAN)══ NVIDIA DGX 效能狀態 ══$(NC)\n"
 	@printf "$(BLUE)── GPU 資訊 ─────────────────────────────────────$(NC)\n"
 	@nvidia-smi 2>/dev/null || printf "$(YELLOW)  (Jetson 使用 tegrastats 取代 nvidia-smi)$(NC)\n"
 	@printf "$(BLUE)── Tegrastats 快照（3 秒）────────────────────────$(NC)\n"
@@ -119,11 +119,11 @@ gpu-info:
 # ─────────────────────────────────────────────────────────────────────
 
 build:
-	@printf "$(BLUE)► 建置 MIC-743 映像（ARM64 Blackwell）...$(NC)\n"
+	@printf "$(BLUE)► 建置 DGX 映像（arm64）...$(NC)\n"
 	$(COMPOSE) $(COMPOSE_FILE) build --parallel
 
 up:
-	@printf "$(BLUE)► 啟動 MIC-743 服務（Blackwell 2,070 TFLOPs CUDA 加速）...$(NC)\n"
+	@printf "$(BLUE)► 啟動 DGX 服務（Blackwell 2,070 TFLOPs CUDA 加速）...$(NC)\n"
 	$(COMPOSE) $(COMPOSE_FILE) up -d --build
 	@echo ""
 	@printf "$(GREEN)✓ 服務已啟動！$(NC)\n\n"
@@ -175,7 +175,7 @@ ps:
 	$(COMPOSE) $(COMPOSE_FILE) ps
 
 status:
-	@printf "$(BLUE)── MIC-743 (Jetson Thor AGX) 容器狀態 ──$(NC)\n"
+	@printf "$(BLUE)── DGX (NVIDIA DGX) 容器狀態 ──$(NC)\n"
 	$(COMPOSE) $(COMPOSE_FILE) ps
 
 # ─────────────────────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ status:
 # ─────────────────────────────────────────────────────────────────────
 
 test:
-	@printf "$(BLUE)► 驗證 MIC-743 服務健康狀態...$(NC)\n"
+	@printf "$(BLUE)► 驗證 DGX 服務健康狀態...$(NC)\n"
 	@PASS=0 ; FAIL=0 ; \
 	for url in \
 		"http://localhost:8101/api/health" \
@@ -224,7 +224,7 @@ clean:
 	@printf "$(GREEN)✓ 容器已清除（資料 Volume 保留）。$(NC)\n"
 
 clean-all:
-	@printf "$(RED)⚠ 這將刪除 MIC-743 所有資料，包含 GGUF 模型（~4GB）！$(NC)\n"
+	@printf "$(RED)⚠ 這將刪除 DGX 所有資料，包含 GGUF 模型（~4GB）！$(NC)\n"
 	@printf "$(YELLOW)確認？(y/N) $(NC)" ; read confirm ; \
 	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
 		$(COMPOSE) $(COMPOSE_FILE) down -v --rmi local ; \
