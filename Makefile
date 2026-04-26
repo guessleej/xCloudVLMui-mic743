@@ -1,5 +1,5 @@
 ###############################################################################
-# Makefile — xCloudVLMui Platform [bot-dgx]
+# Makefile — xCloudVLMui Platform [bot-mic743]
 #
 # 硬體：Advantech NVIDIA DGX
 # SoM ：NVIDIA DGX
@@ -13,7 +13,7 @@
 # │  make test         # 驗證所有服務健康狀態                           │
 # └────────────────────────────────────────────────────────────────────┘
 #
-# Port 配置（bot-dgx 專用）：
+# Port 配置（bot-mic743 專用）：
 #   nginx    → http://localhost:8780  ← 主要入口
 #   backend  → http://localhost:8101/api/health
 #   llama-cpp→ http://localhost:18180/health

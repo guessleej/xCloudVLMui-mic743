@@ -1,5 +1,5 @@
 ###############################################################################
-# docker-compose.yml — xCloudVLMui Platform [bot-dgx]
+# docker-compose.yml — xCloudVLMui Platform [bot-mic743]
 #
 # ════════════════════════════════════════════════════════════════════
 # 目標硬體：Advantech NVIDIA DGX
@@ -13,13 +13,13 @@
 # CUDA    ：12.6 + TensorRT 10.x + cuDNN 9.x
 # ════════════════════════════════════════════════════════════════════
 #
-# ⚠️  此為 bot-dgx 完全獨立部署，與其他實例完全隔離：
-#     - project name   : xcloudvlmui-dgx
+# ⚠️  此為 bot-mic743 完全獨立部署，與其他實例完全隔離：
+#     - project name   : xcloudvlmui-mic743
 #     - container 前綴 : dgx-
 #     - volume 前綴    : dgx-
-#     - network        : dgx-xcloud-net
+#     - network        : mic743-xcloud-net
 #
-# Port 配置（bot-dgx 專用）：
+# Port 配置（bot-mic743 專用）：
 #   nginx    → 8780:80    ← 主要入口
 #   backend  → 8101:8000
 #   frontend → 3200:3000
@@ -32,7 +32,7 @@
 #   make setup && make up
 ###############################################################################
 
-name: xcloudvlmui-dgx
+name: xcloudvlmui-mic743
 
 # ── 共用環境變數 ─────────────────────────────────────────────────────
 # DGX 使用容器內 llama-cpp CUDA（非 host Ollama）
@@ -63,18 +63,18 @@ services:
   # ──────────────────────────────────────────────────────────────────
   model-init:
     image: busybox:latest
-    container_name: dgx-model-init
-    command: ["sh", "-c", "echo '[dgx] Ollama 模式：跳過模型下載' && exit 0"]
+    container_name: mic743-model-init
+    command: ["sh", "-c", "echo '[mic743] Ollama 模式：跳過模型下載' && exit 0"]
     restart: "no"
     networks:
-      - dgx-xcloud-net
+      - mic743-xcloud-net
 
   # ──────────────────────────────────────────────────────────────────
   # [2] mosquitto — Eclipse Mosquitto MQTT Broker
   # ──────────────────────────────────────────────────────────────────
   mosquitto:
     image: eclipse-mosquitto:2.0
-    container_name: dgx-mqtt
+    container_name: mic743-mqtt
     platform: linux/arm64
     restart: unless-stopped
     ports:
@@ -82,8 +82,8 @@ services:
       - "9002:9001"
     volumes:
       - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - dgx-mosquitto-data:/mosquitto/data
-      - dgx-mosquitto-log:/mosquitto/log
+      - mic743-mosquitto-data:/mosquitto/data
+      - mic743-mosquitto-log:/mosquitto/log
     healthcheck:
       test: ["CMD-SHELL", "mosquitto_pub -h localhost -p 1883 -t 'health/ping' -m 'ping' -q 0 2>/dev/null && echo ok || exit 1"]
       interval: 15s
@@ -91,7 +91,7 @@ services:
       retries:  3
       start_period: 10s
     networks:
-      - dgx-xcloud-net
+      - mic743-xcloud-net
     logging: *default-logging
 
   # ──────────────────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ services:
   # ──────────────────────────────────────────────────────────────────
   llama-cpp:
     image: python:3.11-slim
-    container_name: dgx-llama-cpp-stub
+    container_name: mic743-llama-cpp-stub
     restart: unless-stopped
     command:
       - python3
@@ -128,7 +128,7 @@ services:
     ports:
       - "18180:8080"
     networks:
-      - dgx-xcloud-net
+      - mic743-xcloud-net
 
   # ──────────────────────────────────────────────────────────────────
   # [4] vlm-webui — 即時視覺分析 WebUI（WebRTC / RealSense）
@@ -136,15 +136,15 @@ services:
   vlm-webui:
     build:
       context:    ./vlm-webui
-      dockerfile: Dockerfile.vlm.dgx
+      dockerfile: Dockerfile.vlm.mic743
       platforms:
         - linux/arm64
-    image: xcloudvlmui-dgx-vlm-webui:latest
-    container_name: dgx-vlm-webui
+    image: xcloudvlmui-mic743-vlm-webui:latest
+    container_name: mic743-vlm-webui
     restart: unless-stopped
     environment:
       <<: *llm-env
-      APP_NAME: "xCloudVLMui VLM WebUI [bot-dgx]"
+      APP_NAME: "xCloudVLMui VLM WebUI [bot-mic743]"
       CAMERA_DEVICE: "2"
     depends_on:
       llama-cpp:
@@ -161,7 +161,7 @@ services:
     ports:
       - "8190:8090"
     networks:
-      - dgx-xcloud-net
+      - mic743-xcloud-net
     logging: *default-logging
 
   # ──────────────────────────────────────────────────────────────────
@@ -173,12 +173,12 @@ services:
       dockerfile: Dockerfile
       platforms:
         - linux/arm64
-    image: xcloudvlmui-dgx-backend:latest
-    container_name: dgx-backend
+    image: xcloudvlmui-mic743-backend:latest
+    container_name: mic743-backend
     restart: unless-stopped
     environment:
       <<: *llm-env
-      APP_NAME:           "xCloudVLMui Platform [bot-dgx]"
+      APP_NAME:           "xCloudVLMui Platform [bot-mic743]"
       VLM_WEBUI_URL:      http://vlm-webui:8090
       DATABASE_URL:       sqlite+aiosqlite:////data/xcloudvlm.db
       CHROMA_PERSIST_DIR: /data/chroma
@@ -187,12 +187,12 @@ services:
       MQTT_BROKER_HOST:   mosquitto
       MQTT_BROKER_PORT:   "1883"
       MQTT_ENABLED:       "true"
-      SECRET_KEY:         ${SECRET_KEY:-change-me-dgx-production}
+      SECRET_KEY:         ${SECRET_KEY:-change-me-mic743-production}
     env_file:
       - path: ./backend/.env
         required: false
     volumes:
-      - dgx-backend-data:/data
+      - mic743-backend-data:/data
       - ./backend/uploads:/app/uploads
     ports:
       - "8101:8000"
@@ -208,7 +208,7 @@ services:
       retries:  5
       start_period: 30s
     networks:
-      - dgx-xcloud-net
+      - mic743-xcloud-net
     logging: *default-logging
 
   # ──────────────────────────────────────────────────────────────────
@@ -223,8 +223,8 @@ services:
       args:
         - NEXT_PUBLIC_API_URL=https://${HOST_IP:-localhost}:${HTTPS_PORT:-8743}
         - BACKEND_URL=http://backend:8000
-    image: xcloudvlmui-dgx-frontend:latest
-    container_name: dgx-frontend
+    image: xcloudvlmui-mic743-frontend:latest
+    container_name: mic743-frontend
     restart: unless-stopped
     environment:
       - NEXTAUTH_URL=https://${HOST_IP:-localhost}:${HTTPS_PORT:-8743}
@@ -247,7 +247,7 @@ services:
       retries:  5
       start_period: 15s
     networks:
-      - dgx-xcloud-net
+      - mic743-xcloud-net
     logging: *default-logging
 
   # ──────────────────────────────────────────────────────────────────
@@ -255,7 +255,7 @@ services:
   # ──────────────────────────────────────────────────────────────────
   nginx:
     image: nginx:1.25-alpine
-    container_name: dgx-nginx
+    container_name: mic743-nginx
     platform: linux/arm64
     restart: unless-stopped
     ports:
@@ -274,7 +274,7 @@ services:
       retries:  3
       start_period: 15s
     networks:
-      - dgx-xcloud-net
+      - mic743-xcloud-net
     logging: *default-logging
 
   # ──────────────────────────────────────────────────────────────────
@@ -282,7 +282,7 @@ services:
   # ──────────────────────────────────────────────────────────────────
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
-    container_name: dgx-cadvisor
+    container_name: mic743-cadvisor
     platform: linux/arm64
     restart: unless-stopped
     privileged: true
@@ -308,22 +308,22 @@ services:
       retries:  3
       start_period: 10s
     networks:
-      - dgx-xcloud-net
+      - mic743-xcloud-net
     logging: *default-logging
 
 # ── Named Volumes（獨立於其他 bot）────────────────────────────────────
 volumes:
-  dgx-model-data:
+  mic743-model-data:
     driver: local
-  dgx-backend-data:
+  mic743-backend-data:
     driver: local
-  dgx-mosquitto-data:
+  mic743-mosquitto-data:
     driver: local
-  dgx-mosquitto-log:
+  mic743-mosquitto-log:
     driver: local
 
 # ── Network（獨立隔離）────────────────────────────────────────────────
 networks:
-  dgx-xcloud-net:
-    name: dgx-xcloud-net
+  mic743-xcloud-net:
+    name: mic743-xcloud-net
     driver: bridge
