@@ -1,7 +1,7 @@
-<!-- xCloudVLMui — bot-mic743 README -->
+<!-- xCloudVLMui — MIC-743 README -->
 <div align="center">
 
-# xCloudVLMui Platform — bot-mic743
+# xCloudVLMui Platform — MIC-743
 
 **工廠設備健康管理平台 · 工廠視覺 AI 指揮台**
 
@@ -15,8 +15,8 @@
 [![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white)]()
 [![Docker](https://img.shields.io/badge/Docker-Compose%20v2-2496ED?logo=docker&logoColor=white)]()
 
-> 由 **云碩科技 xCloudinfo Corp.Limited** 開發  
-> 專為 **Advantech MIC-743 / NVIDIA Jetson Thor AGX** 優化的邊緣 AI 部署版本
+> 由 **云碩科技 xCloudinfo Corp.Limited** 開發
+> 專為 **Advantech MIC-743-AT / NVIDIA Jetson AGX Thor (T5000)** 優化的邊緣 AI 部署版本
 
 </div>
 
@@ -27,15 +27,15 @@
 | 項目 | 規格 |
 |------|------|
 | **硬體平台** | Advantech MIC-743-AT Edge AI Inference System |
-| **SoM** | NVIDIA Jetson Thor AGX |
+| **SoM** | NVIDIA Jetson AGX Thor T5000 |
 | **CPU** | 14-core ARM Neoverse V3AE 64-bit |
 | **CPU 快取** | L1: 64KB+64KB/核 · L2: 1MB/核 · L3: 16MB |
 | **GPU** | NVIDIA Blackwell — 2,560 CUDA Cores + 96 Tensor Cores (Gen5) |
 | **GPU 頻率** | 最高 1.57 GHz |
 | **AI 效能** | **2,070 FP4 TFLOPs** |
-| **記憶體** | **128 GB LPDDR5X Unified Memory** (CPU + GPU 共享) |
+| **記憶體** | **128 GB LPDDR5X Unified Memory**（CPU + GPU 共享）|
 | **儲存** | 1 TB NVMe SSD |
-| **作業系統** | Ubuntu 22.04 (L4T R38.x) |
+| **作業系統** | Ubuntu 22.04（L4T R38.x）|
 | **JetPack** | 7.x |
 | **CUDA** | 12.6 |
 | **TensorRT** | 10.x |
@@ -44,7 +44,7 @@
 | **USB** | 4× USB 3.2 Gen2 + 1× Micro USB OTG |
 | **工業 I/O** | 4× CAN + I2C + 1× Nano SIM |
 
-> MIC-743 是 NVIDIA Jetson Thor AGX 首批工業級 AI 推論系統，  
+> MIC-743-AT 是 NVIDIA Jetson AGX Thor 首批工業級 AI 推論系統，
 > 專為 VLM / LLM 邊緣運算、實體 AI 與機器人應用設計。
 
 ---
@@ -53,7 +53,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                  MIC-743 / Jetson Thor AGX                       │
+│                  MIC-743 / Jetson AGX Thor T5000                 │
 │                                                                  │
 │  ┌─ [7] nginx :8780 ──────────────────────────────────────────┐  │
 │  │                                                            │  │
@@ -83,7 +83,8 @@
 
 | 服務 | 外部 Port | 內部 Port | 說明 |
 |------|-----------|-----------|------|
-| nginx (主要入口) | **8780** | 80 | 反向代理統一入口 |
+| nginx（主要入口）| **8780** | 80 | 反向代理統一入口 |
+| nginx（HTTPS）| 8743 | 443 | SSL 入口 |
 | backend API | 8101 | 8000 | FastAPI + RAG + MQTT |
 | frontend | 3200 | 3000 | Next.js 儀表板 |
 | llama-cpp | 18180 | 8080 | Blackwell CUDA 推論 |
@@ -113,9 +114,8 @@ sudo systemctl restart docker
 
 # 4. 確認 GPU runtime
 docker info | grep -i runtime
-# 應包含：nvidia
 
-# 5. 設定最高效能模式（可選但建議）
+# 5. 設定最高效能模式（建議）
 sudo nvpmodel -m 0     # MAXN 模式
 sudo jetson_clocks     # 固定最高時脈
 ```
@@ -127,7 +127,7 @@ sudo jetson_clocks     # 固定最高時脈
 git clone https://github.com/guessleej/xCloudVLMui-mic743.git
 cd xCloudVLMui-mic743
 
-# 2. 設定環境（含 GPU 檢查）
+# 2. 設定環境
 make setup
 # 編輯 backend/.env：填入 HF_TOKEN, SECRET_KEY
 # 編輯 frontend/.env.local：填入 NEXTAUTH_SECRET, OAuth 憑證
@@ -159,7 +159,7 @@ make test
 # docker-compose.yml llama-cpp 關鍵參數
 --n-gpu-layers 99    # 全部 Layer 上 GPU（128GB 足夠）
 --flash-attn         # Blackwell Tensor Core Gen5 FlashAttention
---ctx-size 131072    # 128K context window（完整支援）
+--ctx-size 131072    # 128K context window
 --threads 14         # Neoverse V3AE × 14 核全部使用
 --mlock              # 鎖定 128GB unified memory，零 swap
 ```
@@ -169,9 +169,8 @@ make test
 | 項目 | 數值 |
 |------|------|
 | AI 算力 | 2,070 FP4 TFLOPs |
-| 推論速度 (Gemma 4 E4B Q4_K_M) | ~80-120 tokens/s（估算） |
 | Context Window | 128K tokens |
-| 模型載入時間 | ~15-30 秒（首次） |
+| 模型載入時間 | ~15-30 秒（首次）|
 
 ---
 
@@ -180,12 +179,9 @@ make test
 | 模型 | 量化 | 大小 | 用途 |
 |------|------|------|------|
 | Gemma 4 E4B Q4_K_M | GGUF | ~4GB | LLM 問答 + VLM 推論 |
-| Gemma 4 E4B Q6_K | GGUF | ~6GB | 高精度選項（記憶體充裕）|
-| YOLO26n detect (E2E) | ONNX | ~6MB | 設備巡檢（瀏覽器 WASM）|
-| YOLO26n pose (E2E) | ONNX | ~7MB | 人員辨識（瀏覽器 WASM）|
-
-> 128GB unified memory 讓 MIC-743 可同時運行多個大型模型，  
-> 未來版本規劃將 YOLO 推論移至後端 TensorRT EP 執行。
+| Gemma 4 E4B Q6_K | GGUF | ~6GB | 高精度選項 |
+| YOLO11n detect (E2E) | ONNX | ~6MB | 設備巡檢 |
+| YOLO11n pose (E2E) | ONNX | ~7MB | 人員辨識 |
 
 ---
 
@@ -194,9 +190,6 @@ make test
 ```bash
 # 即時 GPU/CPU/記憶體監控
 sudo tegrastats
-
-# 查看 GPU 使用狀況（透過 Makefile）
-make gpu-info
 
 # 查看效能模式
 sudo nvpmodel -q
@@ -214,36 +207,28 @@ sudo nvpmodel -m 0 && sudo jetson_clocks
 sudo apt-get install -y nvidia-container-toolkit
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
-# 驗證：docker run --rm --runtime=nvidia --gpus all ubuntu nvidia-smi
 ```
 
 ### llama-cpp 映像找不到（Blackwell ARM64）
-若 `ghcr.io/ggerganov/llama.cpp:server-cuda` 未支援 Jetson Thor，改用：
 ```yaml
-# docker-compose.yml → llama-cpp → image
-image: dustynv/llama.cpp:r38.1.0  # 待 JetPack 7.x 映像釋出
-```
-
-### 記憶體分配（128GB 配置建議）
-```bash
-# Jetson Thor 預設可能限制 GPU 記憶體分配比例
-# 若推論時 OOM，調整 JetPack power budget：
-sudo nvpmodel -m 0  # MAXN：最大化 GPU 記憶體分配
+# 若 CUDA 映像尚不支援 Jetson Thor，改用：
+image: dustynv/llama.cpp:r38.1.0
 ```
 
 ---
 
-## 四平台總覽
+## 多平台總覽
 
 | 平台 | 倉庫 | Port | 架構 | 推論加速 |
 |------|------|------|------|----------|
-| macOS | [xCloudVLMui](https://github.com/guessleej/xCloudVLMui) | :3110 | ARM64 | Ollama (Apple Silicon) |
-| AIR-030 | [xCloudVLMui-air030](https://github.com/guessleej/xCloudVLMui-air030) | :8880 | ARM64 | CUDA 12.2 / JetPack 6.0 |
+| DGX Spark | [xCloudVLMui-dgx-spark](https://github.com/guessleej/xCloudVLMui-dgx-spark) | :8780 | ARM64 | GB10 CUDA 13 / DGX OS 7.4 |
 | **MIC-743** | **[xCloudVLMui-mic743](https://github.com/guessleej/xCloudVLMui-mic743)** | **:8780** | **ARM64** | **Blackwell CUDA 12.6 / JetPack 7.x** |
+| AIR-030 | [xCloudVLMui-air030](https://github.com/guessleej/xCloudVLMui-air030) | :8780 | ARM64 | Ampere CUDA 11.4 / JetPack 5.1 |
 | x86 | [xCloudVLMui-x86](https://github.com/guessleej/xCloudVLMui-x86) | :8680 | AMD64 | CPU / 可選 NVIDIA GPU |
+| macOS | [xCloudVLMui-macOS](https://github.com/guessleej/xCloudVLMui-macOS) | :8880 | ARM64 | Ollama on Apple Silicon |
 
 ---
 
 <div align="center">
-由 <strong>云碩科技 xCloudinfo Corp.Limited</strong> 開發 · Powered by NVIDIA Jetson Thor AGX (Blackwell)
+由 <strong>云碩科技 xCloudinfo Corp.Limited</strong> 開發 · Powered by NVIDIA Jetson AGX Thor T5000 (Blackwell)
 </div>
