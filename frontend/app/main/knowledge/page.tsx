@@ -601,105 +601,67 @@ export default function KnowledgePage() {
   };
 
   return (
-    <div className="space-y-3">
-      {/* ── Header ── */}
-      <section className="panel-grid overflow-hidden rounded-2xl p-3 sm:p-4">
-        <div className="relative z-10 grid gap-3 xl:grid-cols-[1.25fr_0.9fr]">
-          <div>
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="section-kicker">Knowledge Ops</div>
-              <h2 className="mt-1 text-sm font-semibold text-white">知識作業台</h2>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="signal-chip">
-                <FileText className="h-3.5 w-3.5 text-brand-300" />
-                PDF / TXT / MD / CSV
-              </span>
-              <span className="signal-chip">
-                <FileImage className="h-3.5 w-3.5 text-purple-300" />
-                JPG / PNG / WEBP (OCR)
-              </span>
-              <span className="signal-chip">
-                <Layers className="h-3.5 w-3.5 text-emerald-300" />
-                ChromaDB 向量索引
-              </span>
-              <span className="signal-chip">
-                <BookOpenText className="h-3.5 w-3.5 text-accent-300" />
-                RAG 語意問答
-              </span>
-            </div>
+    <div className="flex flex-col gap-2">
+      {/* ── Header bar ── */}
+      <div className="rounded-2xl border border-white/8 bg-slate-900/60 px-3 py-2">
+        {/* Row 1: title + stats */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="section-kicker">Knowledge Ops</span>
+            <h2 className="text-sm font-semibold text-white">知識作業台</h2>
           </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
             {[
-              { label: "知識文件",   value: stats.total,    unit: "份" },
-              { label: "已建立索引", value: stats.embedded, unit: "份" },
-              { label: "向量段落",   value: stats.chunks,   unit: "段" },
-              { label: "問答歷史",   value: historyTotal,   unit: "筆" },
+              { label: "文件", value: stats.total,    unit: "份" },
+              { label: "索引", value: stats.embedded, unit: "份" },
+              { label: "段落", value: stats.chunks,   unit: "段" },
+              { label: "問答", value: historyTotal,   unit: "筆" },
             ].map(({ label, value, unit }) => (
-              <div key={label} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{label}</p>
-                <p className="mt-2 font-display text-2xl font-semibold text-white">
-                  {value}
-                  <span className="ml-1 text-base font-normal text-slate-400">{unit}</span>
-                </p>
-              </div>
+              <span key={label} className="flex items-baseline gap-0.5">
+                <span className="text-slate-500">{label}</span>
+                <span className="font-semibold text-white">{value}</span>
+                <span className="text-slate-500">{unit}</span>
+              </span>
             ))}
           </div>
         </div>
-      </section>
+        {/* Row 2: chips */}
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <span className="signal-chip !text-[10px] !py-0.5"><FileText  className="h-3 w-3 text-brand-300" />PDF / TXT / MD / CSV</span>
+          <span className="signal-chip !text-[10px] !py-0.5"><FileImage className="h-3 w-3 text-purple-300" />圖片 OCR</span>
+          <span className="signal-chip !text-[10px] !py-0.5"><Layers    className="h-3 w-3 text-emerald-300" />ChromaDB 向量索引</span>
+          <span className="signal-chip !text-[10px] !py-0.5"><BookOpenText className="h-3 w-3 text-accent-300" />RAG 語意問答</span>
+        </div>
+      </div>
 
-      {/* ── Tab Bar ── */}
-      <div className="flex items-center gap-1 rounded-xl border border-white/8 bg-white/[0.03] p-1 w-fit">
-        <button
-          onClick={() => setActiveTab("chat")}
-          className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
-            activeTab === "chat"
-              ? "bg-brand-600 text-white shadow-sm"
-              : "text-slate-400 hover:text-white"
-          }`}
-        >
-          <MessageSquare className="h-4 w-4" />
-          知識問答
-        </button>
-        <button
-          onClick={() => setActiveTab("history")}
-          className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
-            activeTab === "history"
-              ? "bg-brand-600 text-white shadow-sm"
-              : "text-slate-400 hover:text-white"
-          }`}
-        >
-          <History className="h-4 w-4" />
-          歷史記錄
-          {historyTotal > 0 && (
-            <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-xs">
-              {historyTotal}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("manage")}
-          className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
-            activeTab === "manage"
-              ? "bg-brand-600 text-white shadow-sm"
-              : "text-slate-400 hover:text-white"
-          }`}
-        >
-          <Settings2 className="h-4 w-4" />
-          文件管理
-          {docs.length > 0 && (
-            <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-xs">
-              {docs.length}
-            </span>
-          )}
-        </button>
+      {/* ── Tab Bar — 全寬響應式 ── */}
+      <div className="flex items-center gap-1 rounded-xl border border-white/8 bg-white/[0.03] p-1">
+        {([
+          { key: "chat",    icon: MessageSquare, label: "知識問答",  badge: 0 },
+          { key: "history", icon: History,       label: "歷史記錄",  badge: historyTotal },
+          { key: "manage",  icon: Settings2,     label: "文件管理",  badge: docs.length },
+        ] as const).map(({ key, icon: Icon, label, badge }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all sm:flex-none sm:px-4 sm:text-sm ${
+              activeTab === key
+                ? "bg-brand-600 text-white shadow-sm"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span>{label}</span>
+            {badge > 0 && (
+              <span className="rounded-full bg-white/15 px-1.5 py-0.5 text-[10px]">{badge}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* ── Tab: 知識問答 ── */}
       {activeTab === "chat" && (
-        <div className="panel-soft min-h-[820px] overflow-hidden rounded-2xl">
+        <div className="panel-soft overflow-hidden rounded-2xl" style={{ height: "calc(100svh - 170px)" }}>
           <ChatInterface />
         </div>
       )}
@@ -907,7 +869,7 @@ export default function KnowledgePage() {
 
       {/* ── Tab: 文件管理 ── */}
       {activeTab === "manage" && (
-        <div className="grid gap-3 xl:grid-cols-[1fr_1.5fr]">
+        <div className="grid gap-3 lg:grid-cols-[1fr_1.5fr]">
           {/* 上傳區 */}
           <div className="space-y-3">
             <div
